@@ -27,7 +27,7 @@ services:
     volumes:
       - ./infra/mock-oauth2/config.json:/etc/mock-oauth2/config.json:ro
   prometheus:
-    image: prom/prometheus:v3.2.1
+    image: prom/prometheus:v3.13.2
     container_name: laa-prometheus
     restart: unless-stopped
     ports:
@@ -38,7 +38,7 @@ services:
       - "host.docker.internal:host-gateway"
 
   grafana:
-    image: grafana/grafana:13.1.0
+    image: grafana/grafana:13.1.1
     container_name: laa-grafana
     restart: unless-stopped
     ports:
