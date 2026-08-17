@@ -1,3 +1,5 @@
+import org.gradle.api.tasks.testing.logging.TestLogEvent
+
 plugins {
     id 'java'
     id 'checkstyle'
@@ -53,6 +55,7 @@ dependencies {
     compileOnly 'org.projectlombok:lombok:1.18.46'
     annotationProcessor 'org.projectlombok:lombok:1.18.46'
     runtimeOnly 'org.postgresql:postgresql'
+    implementation 'net.datafaker:datafaker:2.5.2'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
@@ -89,6 +92,14 @@ tasks.register('generateAxonMassDataDump', Test) {
     classpath = sourceSets.integrationTest.runtimeClasspath
     useJUnitPlatform()
     include 'uk/gov/justice/laa/dstew/access/GenerateAxonMassDataDumpTest.class'
+    testLogging {
+        events TestLogEvent.PASSED, TestLogEvent.SKIPPED, TestLogEvent.FAILED
+        exceptionFormat = 'full'
+        showExceptions = true
+        showCauses = true
+        showStackTraces = true
+        showStandardStreams = true
+    }
     ['massDataCount', 'massDataWorkers', 'massDataSeed', 'massDataDump', 'massDataProgressInterval'].each {
         if (project.hasProperty(it)) {
             systemProperty it, project.property(it)

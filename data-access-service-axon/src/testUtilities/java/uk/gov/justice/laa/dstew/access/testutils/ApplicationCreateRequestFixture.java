@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import net.datafaker.Faker;
 import uk.gov.justice.laa.dstew.access.model.ApplicationCreateRequest;
 import uk.gov.justice.laa.dstew.access.model.ApplicationStatus;
 import uk.gov.justice.laa.dstew.access.model.ApplicationType;
@@ -19,6 +20,8 @@ public final class ApplicationCreateRequestFixture {
   /** Creates a valid request using the supplied Apply identifiers. */
   public static ApplicationCreateRequest validCreateApplicationRequest(
       UUID applyApplicationId, UUID applyProceedingId) {
+
+    Faker faker = new Faker();
     Map<String, Object> content =
         Map.of(
             "id",
@@ -49,12 +52,13 @@ public final class ApplicationCreateRequestFixture {
                     "usedDelegatedFunctions",
                     false)));
 
+    String firstName = faker.name().firstName();
     IndividualCreateRequest individual =
         IndividualCreateRequest.builder()
-            .firstName("Ada")
-            .lastName("Lovelace")
+            .firstName(firstName)
+            .lastName(faker.name().lastName())
             .dateOfBirth(LocalDate.of(1815, 12, 10))
-            .details(Map.of("preferredName", "Ada"))
+            .details(Map.of("preferredName", firstName))
             .type(IndividualType.CLIENT)
             .build();
 

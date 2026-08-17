@@ -3,6 +3,7 @@ package uk.gov.justice.laa.dstew.access;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.fail;
 
+import com.zaxxer.hikari.HikariDataSource;
 import java.nio.file.Files;
 import java.time.Duration;
 import java.time.Instant;
@@ -16,12 +17,14 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.random.RandomGeneratorFactory;
+import javax.sql.DataSource;
 import org.awaitility.Awaitility;
 import org.axonframework.messaging.queryhandling.gateway.QueryGateway;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -59,6 +62,8 @@ class GenerateAxonMassDataDumpTest {
 
   @Autowired private QueryGateway queryGateway;
   @Autowired private ObjectMapper objectMapper;
+  @Autowired private DataSource dataSource;
+  @Autowired private Environment environment;
   @Autowired private CaseworkerRepository caseworkerRepository;
   @Autowired private CreateApplicationUseCase createApplicationUseCase;
   @Autowired private MakeApplicationDecisionUseCase makeApplicationDecisionUseCase;
@@ -74,7 +79,29 @@ class GenerateAxonMassDataDumpTest {
   @Test
   void generatesAndExportsMassData() throws Exception {
     MassDataConfiguration configuration = MassDataConfiguration.fromSystemProperties();
+    WorkerSettings workerSettings = resolveWorkerSettings(configuration.workers());
     Instant startedAt = Instant.now();
+    System.out.printf(
+        "Starting Axon mass-data generation: requested=%d, workers=%d, seed=%s, dump=%s%n",
+        configuration.count(),
+        workerSettings.requestedWorkers(),
+        configuration.seed().isPresent() ? configuration.seed().getAsLong() : "random",
+        configuration.dumpPath());
+    System.out.printf(
+        "Worker sizing: requested=%d, availableProcessors=%d, cpuCap=%d, dbPoolSize=%d, effective=%d%n",
+        workerSettings.requestedWorkers(),
+        workerSettings.availableProcessors(),
+        workerSettings.cpuCap(),
+        workerSettings.dbPoolSize(),
+        workerSettings.effectiveWorkers());
+    if (workerSettings.effectiveWorkers() != workerSettings.requestedWorkers()) {
+      System.out.printf(
+          "Worker cap applied: requested=%d -> effective=%d (cpuCap=%d, dbPoolSize=%d)%n",
+          workerSettings.requestedWorkers(),
+          workerSettings.effectiveWorkers(),
+          workerSettings.cpuCap(),
+          workerSettings.dbPoolSize());
+    }
     assertThat(
             jdbcTemplate.queryForObject(
                 """
@@ -92,7 +119,7 @@ class GenerateAxonMassDataDumpTest {
     ApplicationLifecycleSelector lifecycleSelector = new ApplicationLifecycleSelector();
     GenerationSummary summary = new GenerationSummary();
     List<String> failures = java.util.Collections.synchronizedList(new ArrayList<>());
-    ExecutorService executor = Executors.newFixedThreadPool(configuration.workers());
+    ExecutorService executor = Executors.newFixedThreadPool(workerSettings.effectiveWorkers());
     try {
       List<Callable<Void>> tasks = new ArrayList<>();
       for (int index = 0; index < configuration.count(); index++) {
@@ -122,9 +149,45 @@ class GenerateAxonMassDataDumpTest {
       }
     }
 
+    printGenerationSummary(configuration, summary);
     assertThat(failures).as("generation failures").isEmpty();
     Counts counts = awaitProjectionCounts(configuration.count());
-    writeDumpAndMetadata(configuration, counts, Duration.between(startedAt, Instant.now()));
+    writeDumpAndMetadata(
+        configuration, workerSettings, counts, Duration.between(startedAt, Instant.now()));
+  }
+
+  private WorkerSettings resolveWorkerSettings(int requestedWorkers) {
+    int availableProcessors = Runtime.getRuntime().availableProcessors();
+    int cpuCap = Math.max(1, availableProcessors * 2);
+    int dbPoolSize = resolveDbPoolSize();
+    int effectiveWorkers = Math.max(1, Math.min(requestedWorkers, Math.min(cpuCap, dbPoolSize)));
+    return new WorkerSettings(
+        requestedWorkers, effectiveWorkers, availableProcessors, cpuCap, dbPoolSize);
+  }
+
+  private int resolveDbPoolSize() {
+    if (dataSource instanceof HikariDataSource hikariDataSource
+        && hikariDataSource.getMaximumPoolSize() > 0) {
+      return hikariDataSource.getMaximumPoolSize();
+    }
+
+    String configuredPoolSize =
+        environment.getProperty("spring.datasource.hikari.maximum-pool-size");
+    if (configuredPoolSize != null) {
+      try {
+        int parsedPoolSize = Integer.parseInt(configuredPoolSize);
+        if (parsedPoolSize > 0) {
+          return parsedPoolSize;
+        }
+      } catch (NumberFormatException ignored) {
+        System.out.printf(
+            "Invalid spring.datasource.hikari.maximum-pool-size value '%s'; defaulting dbPoolSize=10%n",
+            configuredPoolSize);
+      }
+    }
+
+    // Align with Hikari's typical default when no explicit maximum pool size is configured.
+    return 10;
   }
 
   private void generateApplication(
@@ -186,10 +249,6 @@ class GenerateAxonMassDataDumpTest {
         }
       }
       summary.succeeded();
-      if (summary.submittedCount() % configuration.progressInterval() == 0) {
-        System.out.printf(
-            "Generated %d of %d applications%n", summary.submittedCount(), configuration.count());
-      }
     } catch (Exception exception) {
       summary.failed();
       String details =
@@ -205,7 +264,29 @@ class GenerateAxonMassDataDumpTest {
               + lifecycle
               + ": "
               + details);
+    } finally {
+      summary.completed();
+      if (summary.completedCount() % configuration.progressInterval() == 0
+          || summary.completedCount() == configuration.count()) {
+        System.out.printf(
+            "Generation progress: completed=%d/%d, succeeded=%d, failed=%d%n",
+            summary.completedCount(),
+            configuration.count(),
+            summary.succeededCount(),
+            summary.failedCount());
+      }
     }
+  }
+
+  private void printGenerationSummary(
+      MassDataConfiguration configuration, GenerationSummary summary) {
+    System.out.printf(
+        "Generation summary: requested=%d, submitted=%d, completed=%d, succeeded=%d, failed=%d%n",
+        configuration.count(),
+        summary.submittedCount(),
+        summary.completedCount(),
+        summary.succeededCount(),
+        summary.failedCount());
   }
 
   private List<UUID> initialiseCaseworkers(int size) {
@@ -229,9 +310,9 @@ class GenerateAxonMassDataDumpTest {
             () -> {
               Counts counts = queryCounts();
               assertThat(counts.applicationCurrentState())
-                  .isGreaterThanOrEqualTo((long) expectedApplications);
+                  .isGreaterThanOrEqualTo(expectedApplications);
               assertThat(counts.domainEventEntry())
-                  .isGreaterThanOrEqualTo((long) expectedApplications);
+                  .isGreaterThanOrEqualTo(expectedApplications);
             });
     return queryCounts();
   }
@@ -247,7 +328,11 @@ class GenerateAxonMassDataDumpTest {
   }
 
   private void writeDumpAndMetadata(
-      MassDataConfiguration configuration, Counts counts, Duration duration) throws Exception {
+      MassDataConfiguration configuration,
+      WorkerSettings workerSettings,
+      Counts counts,
+      Duration duration)
+      throws Exception {
     Files.createDirectories(configuration.dumpPath().toAbsolutePath().getParent());
     var result =
         postgres.execInContainer(
@@ -267,6 +352,11 @@ class GenerateAxonMassDataDumpTest {
     var metadata = new LinkedHashMap<String, Object>();
     metadata.put("applicationCount", configuration.count());
     metadata.put("workers", configuration.workers());
+    metadata.put("requestedWorkers", workerSettings.requestedWorkers());
+    metadata.put("effectiveWorkers", workerSettings.effectiveWorkers());
+    metadata.put("availableProcessors", workerSettings.availableProcessors());
+    metadata.put("cpuCap", workerSettings.cpuCap());
+    metadata.put("dbPoolSize", workerSettings.dbPoolSize());
     metadata.put(
         "randomSeed", configuration.seed().isPresent() ? configuration.seed().getAsLong() : null);
     metadata.put("durationSeconds", duration.toSeconds());
@@ -293,4 +383,11 @@ class GenerateAxonMassDataDumpTest {
       long applicationCurrentState,
       long applicationHistory,
       long applicationListIndex) {}
+
+  private record WorkerSettings(
+      int requestedWorkers,
+      int effectiveWorkers,
+      int availableProcessors,
+      int cpuCap,
+      int dbPoolSize) {}
 }
