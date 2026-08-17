@@ -520,6 +520,50 @@ export RELEASE_NAME=<release name for the pod - you can find this in the deploym
 Once the command is complete, exit the shell and the pod will be scaled back to 0.
 You can check the database to see the generated data or use swagger to execute endpoints.
 
+### Generate and restore Axon mass data
+
+The Axon mass-data generator runs as an opt-in Testcontainers integration test. It creates data through the service command-side use cases, validates the resulting projections, and exports a PostgreSQL custom-format dump with JSON metadata.
+
+Generate a dump with a reproducible ten-application run:
+
+```bash
+./gradlew :data-access-service-axon:generateAxonMassDataDump \
+  -PmassDataCount=10 \
+  -PmassDataWorkers=2 \
+  -PmassDataSeed=42 \
+  -PmassDataDump=build/generated-dumps/axon-mass-data.dump
+```
+
+`massDataCount` is required. `massDataWorkers` defaults to `10`, `massDataSeed` is optional, and `massDataDump` defaults to `build/generated-dumps/axon-mass-data.dump` within `data-access-service-axon`. The task writes a `.metadata.json` file beside the dump with row counts for verification.
+
+To restore into the local PostgreSQL database used by the Axon module's default datasource, start it first and explicitly confirm the destructive restore:
+
+```bash
+docker compose up -d postgres
+
+RESTORE_TARGET=local \
+CONFIRM_TARGET_RESTORE=yes \
+./scripts/apply-mass-generator-axon-dump.sh \
+  data-access-service-axon/build/generated-dumps/axon-mass-data.dump
+```
+
+Local restore resolves the running `postgres` Compose service, which uses the `laa-data-access-api_pgdata` volume. It targets database `laa_data_access_api` and user `laa_user`. Override `LOCAL_POSTGRES_CONTAINER`, `TARGET_DB_NAME`, `TARGET_DB_USERNAME`, `TARGET_DB_PASSWORD`, or `RESTORE_JOBS` when needed.
+
+To restore into a Kubernetes PostgreSQL service, provide the target details and confirmation:
+
+```bash
+KUBE_NAMESPACE=<namespace> \
+POSTGRES_SERVICE=<postgres-service> \
+TARGET_DB_NAME=<database-name> \
+TARGET_DB_USERNAME=<database-user> \
+TARGET_DB_PASSWORD=<database-password> \
+CONFIRM_TARGET_RESTORE=yes \
+./scripts/apply-mass-generator-axon-dump.sh \
+  data-access-service-axon/build/generated-dumps/axon-mass-data.dump
+```
+
+Both restore modes run `pg_restore --clean --if-exists`, so use a disposable database or one whose existing objects may be replaced.
+
 ## Additional information
 
 ### Libraries used

@@ -79,3 +79,19 @@ tasks.named('integrationTest') {
     dependsOn tasks.named('testUtilitiesClasses')
     useJUnitPlatform()
 }
+
+tasks.register('generateAxonMassDataDump', Test) {
+    dependsOn tasks.named('integrationTestClasses')
+    dependsOn tasks.named('testUtilitiesClasses')
+    description = 'Generates an Axon mass-data PostgreSQL dump using a disposable Testcontainer.'
+    group = 'verification'
+    testClassesDirs = sourceSets.integrationTest.output.classesDirs
+    classpath = sourceSets.integrationTest.runtimeClasspath
+    useJUnitPlatform()
+    include 'uk/gov/justice/laa/dstew/access/GenerateAxonMassDataDumpTest.class'
+    ['massDataCount', 'massDataWorkers', 'massDataSeed', 'massDataDump', 'massDataProgressInterval'].each {
+        if (project.hasProperty(it)) {
+            systemProperty it, project.property(it)
+        }
+    }
+}
