@@ -16,8 +16,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.random.RandomGeneratorFactory;
-import org.axonframework.messaging.queryhandling.gateway.QueryGateway;
 import org.awaitility.Awaitility;
+import org.axonframework.messaging.queryhandling.gateway.QueryGateway;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -52,8 +52,7 @@ import uk.gov.justice.laa.dstew.access.validation.ValidationException;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class GenerateAxonMassDataDumpTest {
 
-  @Container
-  @ServiceConnection
+  @Container @ServiceConnection
   static PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:17-alpine");
 
   @Autowired private JdbcTemplate jdbcTemplate;
@@ -139,17 +138,25 @@ class GenerateAxonMassDataDumpTest {
     UUID applicationId = UUID.randomUUID();
     var random =
         RandomGeneratorFactory.getDefault()
-            .create(configuration.seed().orElseGet(() -> java.util.concurrent.ThreadLocalRandom.current().nextLong()) ^ index);
+            .create(
+                configuration
+                        .seed()
+                        .orElseGet(
+                            () -> java.util.concurrent.ThreadLocalRandom.current().nextLong())
+                    ^ index);
     ApplicationLifecycle lifecycle = lifecycleSelector.select(random);
     summary.submitted();
     try {
       boolean projectionFound =
-          createApplicationUseCase.execute(createApplicationCommandMapper.toCommand(requests.application(applicationId, index), 1));
+          createApplicationUseCase.execute(
+              createApplicationCommandMapper.toCommand(
+                  requests.application(applicationId, index), 1));
       if (!projectionFound) {
         throw new IllegalStateException("Create projection did not become available");
       }
       if (lifecycle.autoGranted()) {
-        recordAutoGrantOutcomeUseCase.record(autoGrantOutcomeCommandMapper.toCommand(applicationId, requests.autoGrant()));
+        recordAutoGrantOutcomeUseCase.record(
+            autoGrantOutcomeCommandMapper.toCommand(applicationId, requests.autoGrant()));
       } else {
         if (lifecycle.makeDecision()) {
           UUID proceedingId =
@@ -164,38 +171,48 @@ class GenerateAxonMassDataDumpTest {
         }
         if (lifecycle.assignCaseworker()) {
           UUID caseworkerId = caseworkerIds.get(random.nextInt(caseworkerIds.size()));
-          var assignment = assignCaseworkerRequestMapper.toAssignment(requests.assignment(applicationId, caseworkerId));
+          var assignment =
+              assignCaseworkerRequestMapper.toAssignment(
+                  requests.assignment(applicationId, caseworkerId));
           assignCaseworkerUseCase.assign(
-              assignment.caseworkerId(), assignment.applicationId(), assignment.serialisedRequest(), assignment.eventDescription());
+              assignment.caseworkerId(),
+              assignment.applicationId(),
+              assignment.serialisedRequest(),
+              assignment.eventDescription());
         }
         if (lifecycle.unassignCaseworker()) {
-          unassignCaseworkerUseCase.execute(unassignCaseworkerRequestMapper.toCommand(applicationId, requests.unassignment()));
+          unassignCaseworkerUseCase.execute(
+              unassignCaseworkerRequestMapper.toCommand(applicationId, requests.unassignment()));
         }
       }
       summary.succeeded();
       if (summary.submittedCount() % configuration.progressInterval() == 0) {
-        System.out.printf("Generated %d of %d applications%n", summary.submittedCount(), configuration.count());
+        System.out.printf(
+            "Generated %d of %d applications%n", summary.submittedCount(), configuration.count());
       }
     } catch (Exception exception) {
       summary.failed();
       String details =
-        exception instanceof ValidationException validationException
-          ? validationException.errors().toString()
-          : exception.toString();
+          exception instanceof ValidationException validationException
+              ? validationException.errors().toString()
+              : exception.toString();
       failures.add(
-        "index="
-          + index
-          + ", applicationId="
-          + applicationId
-          + ", lifecycle="
-          + lifecycle
-          + ": "
-          + details);
+          "index="
+              + index
+              + ", applicationId="
+              + applicationId
+              + ", lifecycle="
+              + lifecycle
+              + ": "
+              + details);
     }
   }
 
   private List<UUID> initialiseCaseworkers(int size) {
-    List<UUID> ids = caseworkerRepository.findAll().stream().map(Caseworker::getId).collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+    List<UUID> ids =
+        caseworkerRepository.findAll().stream()
+            .map(Caseworker::getId)
+            .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
     while (ids.size() < size) {
       UUID id = UUID.randomUUID();
       caseworkerRepository.save(new Caseworker(id, "axon-mass-data-" + ids.size()));
@@ -211,8 +228,10 @@ class GenerateAxonMassDataDumpTest {
         .untilAsserted(
             () -> {
               Counts counts = queryCounts();
-              assertThat(counts.applicationCurrentState()).isGreaterThanOrEqualTo((long) expectedApplications);
-              assertThat(counts.domainEventEntry()).isGreaterThanOrEqualTo((long) expectedApplications);
+              assertThat(counts.applicationCurrentState())
+                  .isGreaterThanOrEqualTo((long) expectedApplications);
+              assertThat(counts.domainEventEntry())
+                  .isGreaterThanOrEqualTo((long) expectedApplications);
             });
     return queryCounts();
   }
@@ -220,25 +239,36 @@ class GenerateAxonMassDataDumpTest {
   private Counts queryCounts() {
     return new Counts(
         jdbcTemplate.queryForObject("SELECT COUNT(*) FROM axon.domain_event_entry", Long.class),
-        jdbcTemplate.queryForObject("SELECT COUNT(*) FROM axon.application_current_state", Long.class),
+        jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM axon.application_current_state", Long.class),
         jdbcTemplate.queryForObject("SELECT COUNT(*) FROM axon.application_history", Long.class),
-        jdbcTemplate.queryForObject("SELECT COUNT(*) FROM axon.application_list_index", Long.class));
+        jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM axon.application_list_index", Long.class));
   }
 
-  private void writeDumpAndMetadata(MassDataConfiguration configuration, Counts counts, Duration duration)
-      throws Exception {
+  private void writeDumpAndMetadata(
+      MassDataConfiguration configuration, Counts counts, Duration duration) throws Exception {
     Files.createDirectories(configuration.dumpPath().toAbsolutePath().getParent());
     var result =
         postgres.execInContainer(
-            "pg_dump", "-U", postgres.getUsername(), "-d", postgres.getDatabaseName(), "--format=custom", "--file=/tmp/axon-mass-data.dump");
-    assertThat(result.getExitCode()).withFailMessage("pg_dump failed:%n%s%n%s", result.getStdout(), result.getStderr()).isZero();
+            "pg_dump",
+            "-U",
+            postgres.getUsername(),
+            "-d",
+            postgres.getDatabaseName(),
+            "--format=custom",
+            "--file=/tmp/axon-mass-data.dump");
+    assertThat(result.getExitCode())
+        .withFailMessage("pg_dump failed:%n%s%n%s", result.getStdout(), result.getStderr())
+        .isZero();
     postgres.copyFileFromContainer("/tmp/axon-mass-data.dump", configuration.dumpPath().toString());
     assertThat(Files.size(configuration.dumpPath())).isPositive();
 
     var metadata = new LinkedHashMap<String, Object>();
     metadata.put("applicationCount", configuration.count());
     metadata.put("workers", configuration.workers());
-    metadata.put("randomSeed", configuration.seed().isPresent() ? configuration.seed().getAsLong() : null);
+    metadata.put(
+        "randomSeed", configuration.seed().isPresent() ? configuration.seed().getAsLong() : null);
     metadata.put("durationSeconds", duration.toSeconds());
     metadata.put("domainEventEntryCount", counts.domainEventEntry());
     metadata.put("applicationCurrentStateCount", counts.applicationCurrentState());
@@ -247,7 +277,14 @@ class GenerateAxonMassDataDumpTest {
     metadata.put("postgresImage", "postgres:17-alpine");
     metadata.put("schema", "axon");
     Files.writeString(
-        configuration.dumpPath().resolveSibling(configuration.dumpPath().getFileName().toString().replaceFirst("\\.dump$", ".metadata.json")),
+        configuration
+            .dumpPath()
+            .resolveSibling(
+                configuration
+                    .dumpPath()
+                    .getFileName()
+                    .toString()
+                    .replaceFirst("\\.dump$", ".metadata.json")),
         objectMapper.writeValueAsString(metadata));
   }
 

@@ -25,13 +25,14 @@ public class GeneratedRequestFactory {
 
   public ApplicationCreateRequest application(UUID applicationId, int index) {
     ApplicationCreateRequest baseline =
-      ApplicationCreateRequestFixture.validCreateApplicationRequest(applicationId, proceedingId(applicationId));
+        ApplicationCreateRequestFixture.validCreateApplicationRequest(
+            applicationId, proceedingId(applicationId));
     return ApplicationCreateRequest.builder()
-      .applicationType(baseline.getApplicationType())
-      .status(baseline.getStatus())
+        .applicationType(baseline.getApplicationType())
+        .status(baseline.getStatus())
         .laaReference("AXON-MG-" + runId + "-" + index)
-      .individuals(baseline.getIndividuals())
-      .applicationContent(baseline.getApplicationContent())
+        .individuals(baseline.getIndividuals())
+        .applicationContent(baseline.getApplicationContent())
         .build();
   }
 
@@ -43,11 +44,11 @@ public class GeneratedRequestFactory {
                 MakeDecisionProceedingRequest.builder()
                     .proceedingId(proceedingId)
                     .meritsDecision(
-                      MeritsDecisionDetailsRequest.builder()
-                        .decision(MeritsDecisionStatus.REFUSED)
-                        .reason("Mass-data refusal")
-                        .justification("Mass-data generated refusal")
-                        .build())
+                        MeritsDecisionDetailsRequest.builder()
+                            .decision(MeritsDecisionStatus.REFUSED)
+                            .reason("Mass-data refusal")
+                            .justification("Mass-data generated refusal")
+                            .build())
                     .build()))
         .applicationVersion(0L)
         .certificate(Map.of("source", "mass-data"))
@@ -61,7 +62,9 @@ public class GeneratedRequestFactory {
   }
 
   public CaseworkerAssignRequest assignment(UUID applicationId, UUID caseworkerId) {
-    return new CaseworkerAssignRequest().caseworkerId(caseworkerId).applicationIds(List.of(applicationId));
+    return new CaseworkerAssignRequest()
+        .caseworkerId(caseworkerId)
+        .applicationIds(List.of(applicationId));
   }
 
   public CaseworkerUnassignRequest unassignment() {

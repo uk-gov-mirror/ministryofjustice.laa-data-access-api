@@ -9,6 +9,7 @@ public class ApplicationLifecycleSelector {
     }
     boolean decision = random.nextDouble() < 0.40;
     boolean assignment = random.nextDouble() < 0.70;
-    return new ApplicationLifecycle(false, decision, assignment, assignment && random.nextDouble() < 0.15);
+    return new ApplicationLifecycle(
+        false, decision, assignment, assignment && random.nextDouble() < 0.15);
   }
 }

@@ -9,16 +9,20 @@ public record MassDataConfiguration(
   public static MassDataConfiguration fromSystemProperties() {
     String countValue = System.getProperty("massDataCount");
     if (countValue == null || countValue.isBlank()) {
-//      throw new IllegalArgumentException("massDataCount is required and must be at least 1");
+      //      throw new IllegalArgumentException("massDataCount is required and must be at least
+      // 1");
       countValue = "1";
     }
     int count = positiveInteger("massDataCount", countValue);
     int workers = positiveInteger("massDataWorkers", System.getProperty("massDataWorkers", "10"));
     int progressInterval =
-        positiveInteger("massDataProgressInterval", System.getProperty("massDataProgressInterval", "100"));
+        positiveInteger(
+            "massDataProgressInterval", System.getProperty("massDataProgressInterval", "100"));
     String seedValue = System.getProperty("massDataSeed");
     OptionalLong seed =
-        seedValue == null || seedValue.isBlank() ? OptionalLong.empty() : OptionalLong.of(Long.parseLong(seedValue));
+        seedValue == null || seedValue.isBlank()
+            ? OptionalLong.empty()
+            : OptionalLong.of(Long.parseLong(seedValue));
     return new MassDataConfiguration(
         count,
         workers,
