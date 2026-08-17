@@ -1,3 +1,5 @@
+import org.gradle.api.tasks.testing.logging.TestLogEvent
+
 plugins {
     id 'java'
     id 'checkstyle'
@@ -53,6 +55,7 @@ dependencies {
     compileOnly 'org.projectlombok:lombok:1.18.46'
     annotationProcessor 'org.projectlombok:lombok:1.18.46'
     runtimeOnly 'org.postgresql:postgresql'
+    implementation 'net.datafaker:datafaker:2.5.2'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
@@ -78,4 +81,28 @@ test {
 tasks.named('integrationTest') {
     dependsOn tasks.named('testUtilitiesClasses')
     useJUnitPlatform()
+}
+
+tasks.register('generateAxonMassDataDump', Test) {
+    dependsOn tasks.named('integrationTestClasses')
+    dependsOn tasks.named('testUtilitiesClasses')
+    description = 'Generates an Axon mass-data PostgreSQL dump using a disposable Testcontainer.'
+    group = 'verification'
+    testClassesDirs = sourceSets.integrationTest.output.classesDirs
+    classpath = sourceSets.integrationTest.runtimeClasspath
+    useJUnitPlatform()
+    include 'uk/gov/justice/laa/dstew/access/GenerateAxonMassDataDumpTest.class'
+    testLogging {
+        events TestLogEvent.PASSED, TestLogEvent.SKIPPED, TestLogEvent.FAILED
+        exceptionFormat = 'full'
+        showExceptions = true
+        showCauses = true
+        showStackTraces = true
+        showStandardStreams = true
+    }
+    ['massDataCount', 'massDataMaxWorkers', 'massDataSeed', 'massDataDump', 'massDataProgressInterval'].each {
+        if (project.hasProperty(it)) {
+            systemProperty it, project.property(it)
+        }
+    }
 }
