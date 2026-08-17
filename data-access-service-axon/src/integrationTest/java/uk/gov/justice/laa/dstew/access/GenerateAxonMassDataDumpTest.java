@@ -26,6 +26,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.annotation.DirtiesContext;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
@@ -52,6 +53,7 @@ import uk.gov.justice.laa.dstew.access.testutils.massdata.MassDataConfiguration;
 import uk.gov.justice.laa.dstew.access.validation.ValidationException;
 
 @Testcontainers
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class GenerateAxonMassDataDumpTest {
 
@@ -161,6 +163,7 @@ class GenerateAxonMassDataDumpTest {
     int cpuCap = Math.max(1, availableProcessors * 2);
     int dbPoolSize = resolveDbPoolSize();
     int effectiveWorkers = Math.max(1, Math.min(requestedWorkers, Math.min(cpuCap, dbPoolSize)));
+    System.out.printf("Workers used: %d", effectiveWorkers);
     return new WorkerSettings(
         requestedWorkers, effectiveWorkers, availableProcessors, cpuCap, dbPoolSize);
   }
