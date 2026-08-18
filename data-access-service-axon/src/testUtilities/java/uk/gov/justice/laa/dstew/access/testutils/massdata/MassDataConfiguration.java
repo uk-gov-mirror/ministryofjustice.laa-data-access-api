@@ -4,7 +4,7 @@ import java.nio.file.Path;
 import java.util.OptionalLong;
 
 public record MassDataConfiguration(
-  int count, int maxWorkers, OptionalLong seed, Path dumpPath, int progressInterval) {
+    int count, int maxWorkers, OptionalLong seed, Path dumpPath, int progressInterval) {
 
   public static MassDataConfiguration fromSystemProperties() {
     String countValue = System.getProperty("massDataCount");
@@ -15,7 +15,7 @@ public record MassDataConfiguration(
     }
     int count = positiveInteger("massDataCount", countValue);
     int maxWorkers =
-      positiveInteger("massDataMaxWorkers", System.getProperty("massDataMaxWorkers", "10"));
+        positiveInteger("massDataMaxWorkers", System.getProperty("massDataMaxWorkers", "10"));
     int progressInterval =
         positiveInteger(
             "massDataProgressInterval", System.getProperty("massDataProgressInterval", "100"));

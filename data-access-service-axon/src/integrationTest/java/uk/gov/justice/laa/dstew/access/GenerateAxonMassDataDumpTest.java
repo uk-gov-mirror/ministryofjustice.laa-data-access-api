@@ -20,7 +20,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.random.RandomGeneratorFactory;
 import javax.sql.DataSource;
 import org.awaitility.Awaitility;
-import org.axonframework.messaging.queryhandling.gateway.QueryGateway;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -32,18 +31,8 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import tools.jackson.databind.ObjectMapper;
-import uk.gov.justice.laa.dstew.access.command.application.CreateApplicationUseCase;
-import uk.gov.justice.laa.dstew.access.command.application.assignment.AssignCaseworkerUseCase;
-import uk.gov.justice.laa.dstew.access.command.application.assignment.UnassignCaseworkerUseCase;
-import uk.gov.justice.laa.dstew.access.command.application.decision.MakeApplicationDecisionUseCase;
-import uk.gov.justice.laa.dstew.access.command.application.ready.RecordAutoGrantOutcomeUseCase;
 import uk.gov.justice.laa.dstew.access.command.caseworker.Caseworker;
 import uk.gov.justice.laa.dstew.access.command.caseworker.CaseworkerRepository;
-import uk.gov.justice.laa.dstew.access.controller.application.AssignCaseworkerRequestMapper;
-import uk.gov.justice.laa.dstew.access.controller.application.AutoGrantOutcomeCommandMapper;
-import uk.gov.justice.laa.dstew.access.controller.application.CreateApplicationCommandMapper;
-import uk.gov.justice.laa.dstew.access.controller.application.MakeDecisionCommandMapper;
-import uk.gov.justice.laa.dstew.access.controller.application.UnassignCaseworkerRequestMapper;
 import uk.gov.justice.laa.dstew.access.testutils.ApplicationLifecycle;
 import uk.gov.justice.laa.dstew.access.testutils.ApplicationTestDataSeeder;
 import uk.gov.justice.laa.dstew.access.testutils.GeneratedRequestFactory;
@@ -55,28 +44,17 @@ import uk.gov.justice.laa.dstew.access.validation.ValidationException;
 @Testcontainers
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-class GenerateAxonMassDataDumpTest {
+class GenerateAxonMassDataDumpTest extends AbstractApplicationTestSeederIntegrationTest {
 
   @Container @ServiceConnection
   static PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:17-alpine");
 
   @Autowired private JdbcTemplate jdbcTemplate;
 
-  @Autowired private QueryGateway queryGateway;
   @Autowired private ObjectMapper objectMapper;
   @Autowired private DataSource dataSource;
   @Autowired private Environment environment;
   @Autowired private CaseworkerRepository caseworkerRepository;
-  @Autowired private CreateApplicationUseCase createApplicationUseCase;
-  @Autowired private MakeApplicationDecisionUseCase makeApplicationDecisionUseCase;
-  @Autowired private RecordAutoGrantOutcomeUseCase recordAutoGrantOutcomeUseCase;
-  @Autowired private AssignCaseworkerUseCase assignCaseworkerUseCase;
-  @Autowired private UnassignCaseworkerUseCase unassignCaseworkerUseCase;
-  @Autowired private CreateApplicationCommandMapper createApplicationCommandMapper;
-  @Autowired private MakeDecisionCommandMapper makeDecisionCommandMapper;
-  @Autowired private AutoGrantOutcomeCommandMapper autoGrantOutcomeCommandMapper;
-  @Autowired private AssignCaseworkerRequestMapper assignCaseworkerRequestMapper;
-  @Autowired private UnassignCaseworkerRequestMapper unassignCaseworkerRequestMapper;
 
   @Test
   void generatesAndExportsMassData() throws Exception {
@@ -119,19 +97,7 @@ class GenerateAxonMassDataDumpTest {
     String runId = UUID.randomUUID().toString().substring(0, 8);
     GeneratedRequestFactory requests = new GeneratedRequestFactory(runId);
     ApplicationLifecycleSelector lifecycleSelector = new ApplicationLifecycleSelector();
-    ApplicationTestDataSeeder seeder =
-      new ApplicationTestDataSeeder(
-        queryGateway,
-        createApplicationUseCase,
-        makeApplicationDecisionUseCase,
-        recordAutoGrantOutcomeUseCase,
-        assignCaseworkerUseCase,
-        unassignCaseworkerUseCase,
-        createApplicationCommandMapper,
-        makeDecisionCommandMapper,
-        autoGrantOutcomeCommandMapper,
-        assignCaseworkerRequestMapper,
-        unassignCaseworkerRequestMapper);
+    ApplicationTestDataSeeder seeder = newSeeder();
     GenerationSummary summary = new GenerationSummary();
     List<String> failures = java.util.Collections.synchronizedList(new ArrayList<>());
     ExecutorService executor = Executors.newFixedThreadPool(workerSettings.effectiveWorkers());
@@ -220,17 +186,15 @@ class GenerateAxonMassDataDumpTest {
     var random =
         RandomGeneratorFactory.getDefault()
             .create(
-                configuration
-                        .seed()
-                        .orElseGet(
-                            () -> ThreadLocalRandom.current().nextLong())
+                configuration.seed().orElseGet(() -> ThreadLocalRandom.current().nextLong())
                     ^ index);
     ApplicationLifecycle lifecycle = lifecycleSelector.select(random);
     summary.submitted();
     try {
       if (lifecycle.assignCaseworker()) {
         UUID caseworkerId = caseworkerIds.get(random.nextInt(caseworkerIds.size()));
-        seeder.seed(applicationId, requests.application(applicationId, index), lifecycle, caseworkerId);
+        seeder.seed(
+            applicationId, requests.application(applicationId, index), lifecycle, caseworkerId);
       } else {
         seeder.seed(applicationId, requests.application(applicationId, index), lifecycle);
       }
@@ -297,8 +261,7 @@ class GenerateAxonMassDataDumpTest {
               Counts counts = queryCounts();
               assertThat(counts.applicationCurrentState())
                   .isGreaterThanOrEqualTo(expectedApplications);
-              assertThat(counts.domainEventEntry())
-                  .isGreaterThanOrEqualTo(expectedApplications);
+              assertThat(counts.domainEventEntry()).isGreaterThanOrEqualTo(expectedApplications);
             });
     return queryCounts();
   }
