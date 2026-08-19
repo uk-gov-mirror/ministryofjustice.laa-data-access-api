@@ -3,6 +3,7 @@ package uk.gov.justice.laa.dstew.access.command;
 import java.sql.SQLException;
 import java.util.function.Supplier;
 import org.axonframework.eventsourcing.eventstore.AppendEventsTransactionRejectedException;
+import org.axonframework.messaging.commandhandling.CommandExecutionException;
 import org.axonframework.messaging.commandhandling.gateway.CommandGateway;
 import org.axonframework.modelling.ConcurrencyException;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -42,13 +43,15 @@ public class RetryingCommandDispatcher {
   private <R> R dispatch(Supplier<R> dispatch) {
     try {
       return dispatch.get();
-    } catch (RuntimeException first) {
+    } catch (RuntimeException exception) {
+      RuntimeException first = unwrapCommandExecutionException(exception);
       if (!isRetryableConcurrentWrite(first)) {
         throw first;
       }
       try {
         return dispatch.get();
-      } catch (RuntimeException retry) {
+      } catch (RuntimeException exceptionOnRetry) {
+        RuntimeException retry = unwrapCommandExecutionException(exceptionOnRetry);
         retry.addSuppressed(first);
         throw retry;
       }
@@ -60,6 +63,23 @@ public class RetryingCommandDispatcher {
         || exception instanceof AppendEventsTransactionRejectedException
         || exception instanceof DataIntegrityViolationException
             && hasUniqueConstraintViolation(exception);
+  }
+
+  /**
+   * Extracts the runtime failure raised by an Axon command handler from Axon's dispatch wrapper.
+   *
+   * <p>Axon reports exceptions thrown while handling a command as {@link CommandExecutionException}.
+   * The retry policy must inspect the handler's underlying failure, such as a {@link
+   * ConcurrencyException} or {@link DataIntegrityViolationException}, rather than the wrapper;
+   * otherwise retryable concurrent-write failures would be treated as non-retryable. Non-runtime
+   * causes remain wrapped because the dispatcher only propagates and classifies runtime failures.
+   */
+  private RuntimeException unwrapCommandExecutionException(RuntimeException exception) {
+    if (exception instanceof CommandExecutionException
+        && exception.getCause() instanceof RuntimeException cause) {
+      return cause;
+    }
+    return exception;
   }
 
   private boolean hasUniqueConstraintViolation(Throwable exception) {

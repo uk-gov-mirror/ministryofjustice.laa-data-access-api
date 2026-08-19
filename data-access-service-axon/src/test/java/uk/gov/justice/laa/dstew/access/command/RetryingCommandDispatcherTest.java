@@ -8,11 +8,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.sql.SQLException;
+import org.axonframework.messaging.commandhandling.CommandExecutionException;
 import org.axonframework.messaging.commandhandling.gateway.CommandGateway;
 import org.axonframework.modelling.ConcurrencyException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
+import uk.gov.justice.laa.dstew.access.exception.ApplicationVersionConflictException;
 import uk.gov.justice.laa.dstew.access.exception.ResourceNotFoundException;
 
 class RetryingCommandDispatcherTest {
@@ -46,11 +48,39 @@ class RetryingCommandDispatcherTest {
   }
 
   @Test
+  void givenWrappedConcurrencyException_whenDispatch_thenRetriesOnce() {
+    when(commandGateway.sendAndWait(command))
+        .thenThrow(
+            new CommandExecutionException(
+                "command failed", new ConcurrencyException("concurrent write")))
+        .thenReturn(null);
+
+    dispatcher.dispatch(command);
+
+    verify(commandGateway, times(2)).sendAndWait(command);
+  }
+
+  @Test
   void givenUniqueConstraintViolation_whenDispatch_thenRetriesOnce() {
     when(commandGateway.sendAndWait(command))
         .thenThrow(
             new DataIntegrityViolationException(
                 "duplicate key", new SQLException("duplicate key value", "23505")))
+        .thenReturn(null);
+
+    dispatcher.dispatch(command);
+
+    verify(commandGateway, times(2)).sendAndWait(command);
+  }
+
+  @Test
+  void givenWrappedUniqueConstraintViolation_whenDispatch_thenRetriesOnce() {
+    when(commandGateway.sendAndWait(command))
+        .thenThrow(
+            new CommandExecutionException(
+                "command failed",
+                new DataIntegrityViolationException(
+                    "duplicate key", new SQLException("duplicate key value", "23505"))))
         .thenReturn(null);
 
     dispatcher.dispatch(command);
@@ -79,6 +109,16 @@ class RetryingCommandDispatcherTest {
   }
 
   @Test
+  void givenWrappedApplicationVersionConflict_whenDispatch_thenPropagatesItsCauseWithoutRetry() {
+    ApplicationVersionConflictException failure = new ApplicationVersionConflictException(null, 0L);
+    when(commandGateway.sendAndWait(command))
+        .thenThrow(new CommandExecutionException("command failed", failure));
+
+    assertThatThrownBy(() -> dispatcher.dispatch(command)).isSameAs(failure);
+    verify(commandGateway, times(1)).sendAndWait(command);
+  }
+
+  @Test
   void givenRetryAlsoFails_whenDispatch_thenRethrowsWithOriginalSuppressed() {
     ConcurrencyException first = new ConcurrencyException("first");
     ResourceNotFoundException retry = new ResourceNotFoundException("retry failure");
@@ -86,6 +126,19 @@ class RetryingCommandDispatcherTest {
 
     assertThatThrownBy(() -> dispatcher.dispatch(command))
         .isInstanceOf(ResourceNotFoundException.class)
+        .satisfies(e -> assertThat(e.getSuppressed()).contains(first));
+  }
+
+  @Test
+  void givenRetryProducesWrappedApplicationVersionConflict_whenDispatch_thenPropagatesItsCause() {
+    ConcurrencyException first = new ConcurrencyException("first");
+    ApplicationVersionConflictException retry = new ApplicationVersionConflictException(null, 0L);
+    when(commandGateway.sendAndWait(command))
+        .thenThrow(first)
+        .thenThrow(new CommandExecutionException("command failed", retry));
+
+    assertThatThrownBy(() -> dispatcher.dispatch(command))
+        .isSameAs(retry)
         .satisfies(e -> assertThat(e.getSuppressed()).contains(first));
   }
 }
