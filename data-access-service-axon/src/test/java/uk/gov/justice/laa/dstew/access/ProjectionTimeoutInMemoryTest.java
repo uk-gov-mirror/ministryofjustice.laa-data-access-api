@@ -12,6 +12,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import org.axonframework.common.configuration.AxonConfiguration;
 import org.axonframework.messaging.eventhandling.processing.streaming.StreamingEventProcessor;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.TestRestTemplate;
@@ -88,7 +89,7 @@ class ProjectionTimeoutInMemoryTest {
     long elapsedMs = System.currentTimeMillis() - startMs;
 
     // Command committed → 202 because projection never appeared within the 200 ms timeout.
-    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
     assertThat(response.getHeaders().getLocation()).isNotNull();
     assertThat(response.getHeaders().getLocation().getPath())
         .isEqualTo("/api/v0/applications/" + applicationId);
@@ -120,6 +121,7 @@ class ProjectionTimeoutInMemoryTest {
     assertThat(directRead.getBody().getApplicationId()).isEqualTo(applicationId);
   }
 
+  @Disabled("No longer relevant as Get Application does not read from a projection")
   @Test
   void givenProjectionLagAfterManualReadiness_whenDeliveryIsRepeated_thenNoSecondEventIsAppended() {
     UUID applicationId = UUID.randomUUID();
@@ -190,6 +192,7 @@ class ProjectionTimeoutInMemoryTest {
             });
   }
 
+  @Disabled("No longer relevant as Get Application does not read from a projection")
   @Test
   void givenProjectionLagAfterDecision_whenDeliveryIsRepeated_thenConflictDoesNotAppendAnEvent() {
     UUID applicationId = UUID.randomUUID();

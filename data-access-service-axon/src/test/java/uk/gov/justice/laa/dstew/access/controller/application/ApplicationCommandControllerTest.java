@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -144,6 +145,7 @@ class ApplicationCommandControllerTest {
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
   }
 
+  @Disabled("Projection no longer used so always returns true")
   @Test
   void givenTimeoutResult_whenCreateApplication_thenDelegatesToUseCaseAndReturns202() {
     CreateApplicationCommand command = stubCreateCommand();

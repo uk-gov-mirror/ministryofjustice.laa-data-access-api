@@ -158,10 +158,8 @@ public class ApplicationCommandController {
             .path("/{id}")
             .buildAndExpand(command.applicationId())
             .toUri();
-    boolean projected = createApplicationUseCase.execute(command);
-    return projected
-        ? ResponseEntity.created(location).build()
-        : ResponseEntity.accepted().location(location).build();
+    createApplicationUseCase.execute(command);
+    return ResponseEntity.created(location).build();
   }
 
   /** Replaces an existing Application's content and optional status. */

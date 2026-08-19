@@ -69,15 +69,6 @@ public class ApplicationProjection {
     this.listIndexRepository = listIndexRepository;
   }
 
-  /** Returns the current-state projection for the requested Application. */
-  @QueryHandler
-  public @Nullable ApplicationReadModel handle(FindApplicationByIdQuery query) {
-    return applicationReadRepository
-        .findById(query.applicationId())
-        .flatMap(this::hydrate)
-        .orElse(null);
-  }
-
   /**
    * Returns all notes for the requested Application, ordered by creation time ascending, or {@code
    * null} if no application with the given ID exists.

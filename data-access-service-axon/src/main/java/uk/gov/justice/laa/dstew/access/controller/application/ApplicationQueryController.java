@@ -27,7 +27,6 @@ import uk.gov.justice.laa.dstew.access.model.ApplicationSummaryResponse;
 import uk.gov.justice.laa.dstew.access.model.DomainEventType;
 import uk.gov.justice.laa.dstew.access.model.MatterType;
 import uk.gov.justice.laa.dstew.access.model.ServiceName;
-import uk.gov.justice.laa.dstew.access.query.SubscriptionProjectionGateway;
 import uk.gov.justice.laa.dstew.access.query.application.ApplicationNotesResult;
 import uk.gov.justice.laa.dstew.access.query.application.ApplicationReadModel;
 import uk.gov.justice.laa.dstew.access.query.application.FindAllApplicationsQuery;
@@ -47,7 +46,6 @@ public class ApplicationQueryController {
   private final GetAllApplicationsResponseMapper getAllResponseMapper;
   private final GetApplicationHistoryResponseMapper historyResponseMapper;
   private final GetAllNotesForApplicationResponseMapper notesResponseMapper;
-  private final SubscriptionProjectionGateway projectionGateway;
 
   /**
    * Constructs the controller with its query gateway and response mappers.
@@ -69,14 +67,12 @@ public class ApplicationQueryController {
       GetApplicationResponseMapper responseMapper,
       GetAllApplicationsResponseMapper getAllResponseMapper,
       GetApplicationHistoryResponseMapper historyResponseMapper,
-      GetAllNotesForApplicationResponseMapper notesResponseMapper,
-      SubscriptionProjectionGateway projectionGateway) {
+      GetAllNotesForApplicationResponseMapper notesResponseMapper) {
     this.queryGateway = queryGateway;
     this.responseMapper = responseMapper;
     this.getAllResponseMapper = getAllResponseMapper;
     this.historyResponseMapper = historyResponseMapper;
     this.notesResponseMapper = notesResponseMapper;
-    this.projectionGateway = projectionGateway;
   }
 
   /**
@@ -126,7 +122,7 @@ public class ApplicationQueryController {
   @GetMapping("/{id}")
   public ResponseEntity<ApplicationResponse> getApplicationById(@PathVariable UUID id) {
     ApplicationReadModel application =
-        findApplicationAwaitingProjection(id)
+        findApplication(id)
             .orElseThrow(
                 () -> new ResourceNotFoundException("No application found with ID: " + id));
     return ResponseEntity.ok(responseMapper.toResponse(application));
@@ -179,10 +175,10 @@ public class ApplicationQueryController {
     return ResponseEntity.ok(response);
   }
 
-  private Optional<ApplicationReadModel> findApplicationAwaitingProjection(UUID applicationId) {
-    return projectionGateway.findProjection(
-        new FindApplicationByIdQuery(applicationId), ApplicationReadModel.class);
-  }
+  //  private Optional<ApplicationReadModel> findApplicationAwaitingProjection(UUID applicationId) {
+  //    return projectionGateway.findProjection(
+  //        new FindApplicationByIdQuery(applicationId), ApplicationReadModel.class);
+  //  }
 
   private Optional<ApplicationReadModel> findApplication(UUID applicationId) {
     return Optional.ofNullable(
