@@ -68,11 +68,12 @@ public class RetryingCommandDispatcher {
   /**
    * Extracts the runtime failure raised by an Axon command handler from Axon's dispatch wrapper.
    *
-   * <p>Axon reports exceptions thrown while handling a command as {@link CommandExecutionException}.
-   * The retry policy must inspect the handler's underlying failure, such as a {@link
-   * ConcurrencyException} or {@link DataIntegrityViolationException}, rather than the wrapper;
-   * otherwise retryable concurrent-write failures would be treated as non-retryable. Non-runtime
-   * causes remain wrapped because the dispatcher only propagates and classifies runtime failures.
+   * <p>Axon reports exceptions thrown while handling a command as {@link
+   * CommandExecutionException}. The retry policy must inspect the handler's underlying failure,
+   * such as a {@link ConcurrencyException} or {@link DataIntegrityViolationException}, rather than
+   * the wrapper; otherwise retryable concurrent-write failures would be treated as non-retryable.
+   * Non-runtime causes remain wrapped because the dispatcher only propagates and classifies runtime
+   * failures.
    */
   private RuntimeException unwrapCommandExecutionException(RuntimeException exception) {
     if (exception instanceof CommandExecutionException
