@@ -1,7 +1,6 @@
-package uk.gov.justice.laa.dstew.access.query.application.priorauthority.model;
+package uk.gov.justice.laa.dstew.access.content.priorauthority;
 
 import java.util.UUID;
-import uk.gov.justice.laa.dstew.access.content.priorauthority.PriorAuthorityContent;
 import uk.gov.justice.laa.dstew.access.query.application.priorauthority.PriorAuthorityReadModel;
 
 /** Typed result of retrieving a prior-authority submission. */
@@ -41,35 +40,16 @@ public record PriorAuthorityResult(
         content.expertDetails().expertType(),
         content.expertDetails().expertFullName(),
         content.expertDetails().expertPostcode(),
-        expertCosts == null
-            ? null
-            : new ExpertCosts(
-                BillingType.from(expertCosts.billingType()),
-                expertCosts.hourlyRate(),
-                expertCosts.timeRequested() == null
-                    ? null
-                    : new TimeRequested(
-                        expertCosts.timeRequested().hours(), expertCosts.timeRequested().minutes()),
-                expertCosts.totalAmount(),
-                expertCosts.costsSharedWithOtherParties(),
-                expertCosts.apportionment() == null
-                    ? null
-                    : new Apportionment(
-                        expertCosts.apportionment().partiesSharingCosts(),
-                        expertCosts.apportionment().clientShareAmount())));
+        expertCosts);
   }
 
   private static CounselDetails toCounselDetails(PriorAuthorityContent content) {
     return content.counselDetails() == null
         ? null
-        : new CounselDetails(CounselType.from(content.counselDetails().counselType()));
+        : new CounselDetails(content.counselDetails().counselType());
   }
 
   private static DisbursementDetails toDisbursementDetails(PriorAuthorityContent content) {
-    return content.disbursementDetails() == null
-        ? null
-        : new DisbursementDetails(
-            content.disbursementDetails().disbursementPurpose(),
-            content.disbursementDetails().disbursementAmount());
+    return content.disbursementDetails() == null ? null : content.disbursementDetails();
   }
 }

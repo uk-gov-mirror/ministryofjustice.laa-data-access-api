@@ -10,7 +10,9 @@ import org.junit.jupiter.api.Test;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;
 import uk.gov.justice.laa.dstew.access.content.priorauthority.Apportionment;
+import uk.gov.justice.laa.dstew.access.content.priorauthority.BillingType;
 import uk.gov.justice.laa.dstew.access.content.priorauthority.CounselDetails;
+import uk.gov.justice.laa.dstew.access.content.priorauthority.CounselType;
 import uk.gov.justice.laa.dstew.access.content.priorauthority.DisbursementDetails;
 import uk.gov.justice.laa.dstew.access.content.priorauthority.ExpertCosts;
 import uk.gov.justice.laa.dstew.access.content.priorauthority.ExpertDetails;
@@ -36,7 +38,8 @@ class PriorAuthoritySchemaTest {
                 "Pathologist",
                 "Casey Expert",
                 "AB1 2CD",
-                new ExpertCosts("FIXED_RATE", null, null, BigDecimal.valueOf(900), false, null)),
+                new ExpertCosts(
+                    BillingType.FIXED_RATE, null, null, BigDecimal.valueOf(900), false, null)),
             null,
             null),
         "PriorAuthority.json",
@@ -50,7 +53,7 @@ class PriorAuthoritySchemaTest {
             "COUNSEL",
             "Need specialist counsel",
             null,
-            new CounselDetails("KINGS_COUNSEL_ALONE"),
+            new CounselDetails(CounselType.KINGS_COUNSEL_ALONE),
             null),
         "PriorAuthority.json",
         1);
@@ -86,7 +89,7 @@ class PriorAuthoritySchemaTest {
                 "Casey Expert",
                 "AB1 2CD",
                 new ExpertCosts(
-                    "HOURLY",
+                    BillingType.HOURLY,
                     null,
                     new TimeRequested(2, 30),
                     BigDecimal.valueOf(900),
@@ -108,7 +111,12 @@ class PriorAuthoritySchemaTest {
                 "Casey Expert",
                 "AB1 2CD",
                 new ExpertCosts(
-                    "HOURLY", BigDecimal.valueOf(300), null, BigDecimal.valueOf(900), false, null)),
+                    BillingType.HOURLY,
+                    BigDecimal.valueOf(300),
+                    null,
+                    BigDecimal.valueOf(900),
+                    false,
+                    null)),
             null,
             null),
         "timeRequested");
@@ -124,7 +132,8 @@ class PriorAuthoritySchemaTest {
                 "Pathologist",
                 "Casey Expert",
                 "AB1 2CD",
-                new ExpertCosts("FIXED_RATE", null, null, BigDecimal.valueOf(900), true, null)),
+                new ExpertCosts(
+                    BillingType.FIXED_RATE, null, null, BigDecimal.valueOf(900), true, null)),
             null,
             null),
         "apportionment");
@@ -132,10 +141,15 @@ class PriorAuthoritySchemaTest {
 
   @Test
   void givenInvalidCounselEnum_whenValidate_thenRejects() {
-    assertRejected(
-        new PriorAuthorityContent(
-            "COUNSEL", "Need counsel", null, new CounselDetails("SILK"), null),
-        "counselType");
+    Map<String, Object> payload =
+        JsonMapper.builder()
+            .build()
+            .convertValue(hourlyExpertContent(), new TypeReference<Map<String, Object>>() {});
+    payload.put("priorAuthorityType", "COUNSEL");
+    payload.remove("expertDetails");
+    payload.put("counselDetails", Map.of("counselType", "SILK"));
+
+    assertRejected(payload, "counselType");
   }
 
   @Test
@@ -161,7 +175,7 @@ class PriorAuthoritySchemaTest {
   void givenMissingJustification_whenValidate_thenRejects() {
     assertRejected(
         new PriorAuthorityContent(
-            "COUNSEL", null, null, new CounselDetails("KINGS_COUNSEL_ALONE"), null),
+            "COUNSEL", null, null, new CounselDetails(CounselType.KINGS_COUNSEL_ALONE), null),
         "justification");
   }
 
@@ -195,7 +209,7 @@ class PriorAuthoritySchemaTest {
         "disbursementDetails");
   }
 
-  private void assertRejected(PriorAuthorityContent content, String expectedMessagePart) {
+  private void assertRejected(Object content, String expectedMessagePart) {
     assertThatThrownBy(() -> validator.validate(content, "PriorAuthority.json", 1))
         .isInstanceOf(ValidationException.class)
         .satisfies(
@@ -213,7 +227,7 @@ class PriorAuthoritySchemaTest {
             "Casey Expert",
             "AB1 2CD",
             new ExpertCosts(
-                "HOURLY",
+                BillingType.HOURLY,
                 BigDecimal.valueOf(300),
                 new TimeRequested(2, 30),
                 BigDecimal.valueOf(900),

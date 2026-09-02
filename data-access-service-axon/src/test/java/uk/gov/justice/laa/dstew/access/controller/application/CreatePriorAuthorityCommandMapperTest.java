@@ -36,7 +36,8 @@ class CreatePriorAuthorityCommandMapperTest {
     assertThat(command.content().expertDetails().expertFullName()).isEqualTo("Casey Expert");
     assertThat(command.content().expertDetails().expertPostcode()).isEqualTo("AB1 2CD");
     assertThat(command.content().expertDetails().expertCosts()).isNotNull();
-    assertThat(command.content().expertDetails().expertCosts().billingType()).isEqualTo("HOURLY");
+    assertThat(command.content().expertDetails().expertCosts().billingType().name())
+        .isEqualTo("HOURLY");
     assertThat(command.content().expertDetails().expertCosts().hourlyRate())
         .isEqualByComparingTo(BigDecimal.valueOf(300.0));
     assertThat(command.content().expertDetails().expertCosts().timeRequested()).isNotNull();
@@ -62,7 +63,8 @@ class CreatePriorAuthorityCommandMapperTest {
 
     assertThat(command.content().priorAuthorityType()).isEqualTo("COUNSEL");
     assertThat(command.content().counselDetails()).isNotNull();
-    assertThat(command.content().counselDetails().counselType()).isEqualTo("KINGS_COUNSEL_ALONE");
+    assertThat(command.content().counselDetails().counselType().name())
+        .isEqualTo("KINGS_COUNSEL_ALONE");
   }
 
   @Test

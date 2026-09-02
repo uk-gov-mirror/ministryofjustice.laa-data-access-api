@@ -8,7 +8,7 @@ import uk.gov.justice.laa.dstew.access.ExcludeFromGeneratedCodeCoverage;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @ExcludeFromGeneratedCodeCoverage
 public record ExpertCosts(
-    String billingType,
+    BillingType billingType,
     BigDecimal hourlyRate,
     TimeRequested timeRequested,
     BigDecimal totalAmount,

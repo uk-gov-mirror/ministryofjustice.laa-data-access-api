@@ -1,6 +1,7 @@
 package uk.gov.justice.laa.dstew.access.controller.application;
 
 import org.springframework.stereotype.Component;
+import uk.gov.justice.laa.dstew.access.content.priorauthority.PriorAuthorityResult;
 import uk.gov.justice.laa.dstew.access.model.Apportionment;
 import uk.gov.justice.laa.dstew.access.model.BillingType;
 import uk.gov.justice.laa.dstew.access.model.CounselDetails;
@@ -10,7 +11,6 @@ import uk.gov.justice.laa.dstew.access.model.ExpertCosts;
 import uk.gov.justice.laa.dstew.access.model.ExpertDetails;
 import uk.gov.justice.laa.dstew.access.model.PriorAuthorityResponse;
 import uk.gov.justice.laa.dstew.access.model.TimeRequested;
-import uk.gov.justice.laa.dstew.access.query.application.priorauthority.model.PriorAuthorityResult;
 
 /** Maps get-prior-authority use-case results to the public API response. */
 @Component
@@ -35,8 +35,7 @@ public class GetPriorAuthorityResponseMapper {
   }
 
   private ExpertDetails toExpertDetails(
-      uk.gov.justice.laa.dstew.access.query.application.priorauthority.model.ExpertDetails
-          details) {
+      uk.gov.justice.laa.dstew.access.content.priorauthority.ExpertDetails details) {
     if (details == null) {
       return null;
     }
@@ -48,7 +47,7 @@ public class GetPriorAuthorityResponseMapper {
   }
 
   private ExpertCosts toExpertCosts(
-      uk.gov.justice.laa.dstew.access.query.application.priorauthority.model.ExpertCosts costs) {
+      uk.gov.justice.laa.dstew.access.content.priorauthority.ExpertCosts costs) {
     if (costs == null) {
       return null;
     }
@@ -63,8 +62,7 @@ public class GetPriorAuthorityResponseMapper {
   }
 
   private CounselDetails toCounselDetails(
-      uk.gov.justice.laa.dstew.access.query.application.priorauthority.model.CounselDetails
-          details) {
+      uk.gov.justice.laa.dstew.access.content.priorauthority.CounselDetails details) {
     return details == null
         ? null
         : new CounselDetails()
@@ -75,8 +73,7 @@ public class GetPriorAuthorityResponseMapper {
   }
 
   private DisbursementDetails toDisbursementDetails(
-      uk.gov.justice.laa.dstew.access.query.application.priorauthority.model.DisbursementDetails
-          details) {
+      uk.gov.justice.laa.dstew.access.content.priorauthority.DisbursementDetails details) {
     return details == null
         ? null
         : new DisbursementDetails()
@@ -85,16 +82,14 @@ public class GetPriorAuthorityResponseMapper {
   }
 
   private TimeRequested toTimeRequested(
-      uk.gov.justice.laa.dstew.access.query.application.priorauthority.model.TimeRequested
-          timeRequested) {
+      uk.gov.justice.laa.dstew.access.content.priorauthority.TimeRequested timeRequested) {
     return timeRequested == null
         ? null
         : new TimeRequested().hours(timeRequested.hours()).minutes(timeRequested.minutes());
   }
 
   private Apportionment toApportionment(
-      uk.gov.justice.laa.dstew.access.query.application.priorauthority.model.Apportionment
-          apportionment) {
+      uk.gov.justice.laa.dstew.access.content.priorauthority.Apportionment apportionment) {
     return apportionment == null
         ? null
         : new Apportionment()

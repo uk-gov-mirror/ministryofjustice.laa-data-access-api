@@ -20,15 +20,16 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import uk.gov.justice.laa.dstew.access.command.application.priorauthority.data.PriorAuthorityDataPayload;
 import uk.gov.justice.laa.dstew.access.command.application.priorauthority.data.PriorAuthorityDataStore;
+import uk.gov.justice.laa.dstew.access.content.priorauthority.BillingType;
 import uk.gov.justice.laa.dstew.access.content.priorauthority.CounselDetails;
+import uk.gov.justice.laa.dstew.access.content.priorauthority.CounselType;
 import uk.gov.justice.laa.dstew.access.content.priorauthority.DisbursementDetails;
 import uk.gov.justice.laa.dstew.access.content.priorauthority.ExpertCosts;
 import uk.gov.justice.laa.dstew.access.content.priorauthority.ExpertDetails;
 import uk.gov.justice.laa.dstew.access.content.priorauthority.PriorAuthorityContent;
+import uk.gov.justice.laa.dstew.access.content.priorauthority.PriorAuthorityResult;
+import uk.gov.justice.laa.dstew.access.content.priorauthority.PriorAuthorityType;
 import uk.gov.justice.laa.dstew.access.exception.ResourceNotFoundException;
-import uk.gov.justice.laa.dstew.access.query.application.priorauthority.model.CounselType;
-import uk.gov.justice.laa.dstew.access.query.application.priorauthority.model.PriorAuthorityResult;
-import uk.gov.justice.laa.dstew.access.query.application.priorauthority.model.PriorAuthorityType;
 
 class GetPriorAuthorityUseCaseTest {
 
@@ -56,7 +57,11 @@ class GetPriorAuthorityUseCaseTest {
             .build();
     PriorAuthorityContent content =
         new PriorAuthorityContent(
-            "COUNSEL", "Counsel is required", null, new CounselDetails("TWO_JUNIOR_COUNSEL"), null);
+            "COUNSEL",
+            "Counsel is required",
+            null,
+            new CounselDetails(CounselType.TWO_JUNIOR_COUNSEL),
+            null);
     when(queryGateway.query(
             any(FindPriorAuthorityBySubmissionIdQuery.class), eq(PriorAuthorityReadModel.class)))
         .thenReturn(CompletableFuture.completedFuture(readModel));
@@ -128,7 +133,7 @@ class GetPriorAuthorityUseCaseTest {
                 "COUNSEL",
                 "Counsel is required",
                 null,
-                new CounselDetails("TWO_JUNIOR_COUNSEL"),
+                new CounselDetails(CounselType.TWO_JUNIOR_COUNSEL),
                 null),
             PriorAuthorityType.COUNSEL,
             false,
@@ -185,7 +190,7 @@ class GetPriorAuthorityUseCaseTest {
                 "PSYCHIATRIST",
                 "Jane Doe",
                 "AB1 2CD",
-                new ExpertCosts("FIXED_RATE", null, null, BigDecimal.TEN, false, null)),
+                new ExpertCosts(BillingType.FIXED_RATE, null, null, BigDecimal.TEN, false, null)),
             null,
             null);
     when(queryGateway.query(

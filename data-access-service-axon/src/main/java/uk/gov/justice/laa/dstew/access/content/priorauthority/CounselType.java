@@ -1,4 +1,4 @@
-package uk.gov.justice.laa.dstew.access.query.application.priorauthority.model;
+package uk.gov.justice.laa.dstew.access.content.priorauthority;
 
 import uk.gov.justice.laa.dstew.access.ExcludeFromGeneratedCodeCoverage;
 

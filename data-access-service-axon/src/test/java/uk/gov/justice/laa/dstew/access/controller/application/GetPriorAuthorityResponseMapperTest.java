@@ -5,16 +5,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.math.BigDecimal;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
-import uk.gov.justice.laa.dstew.access.query.application.priorauthority.model.Apportionment;
-import uk.gov.justice.laa.dstew.access.query.application.priorauthority.model.BillingType;
-import uk.gov.justice.laa.dstew.access.query.application.priorauthority.model.CounselDetails;
-import uk.gov.justice.laa.dstew.access.query.application.priorauthority.model.CounselType;
-import uk.gov.justice.laa.dstew.access.query.application.priorauthority.model.DisbursementDetails;
-import uk.gov.justice.laa.dstew.access.query.application.priorauthority.model.ExpertCosts;
-import uk.gov.justice.laa.dstew.access.query.application.priorauthority.model.ExpertDetails;
-import uk.gov.justice.laa.dstew.access.query.application.priorauthority.model.PriorAuthorityResult;
-import uk.gov.justice.laa.dstew.access.query.application.priorauthority.model.PriorAuthorityType;
-import uk.gov.justice.laa.dstew.access.query.application.priorauthority.model.TimeRequested;
+import uk.gov.justice.laa.dstew.access.content.priorauthority.Apportionment;
+import uk.gov.justice.laa.dstew.access.content.priorauthority.BillingType;
+import uk.gov.justice.laa.dstew.access.content.priorauthority.CounselDetails;
+import uk.gov.justice.laa.dstew.access.content.priorauthority.CounselType;
+import uk.gov.justice.laa.dstew.access.content.priorauthority.DisbursementDetails;
+import uk.gov.justice.laa.dstew.access.content.priorauthority.ExpertCosts;
+import uk.gov.justice.laa.dstew.access.content.priorauthority.ExpertDetails;
+import uk.gov.justice.laa.dstew.access.content.priorauthority.PriorAuthorityResult;
+import uk.gov.justice.laa.dstew.access.content.priorauthority.PriorAuthorityType;
+import uk.gov.justice.laa.dstew.access.content.priorauthority.TimeRequested;
 
 class GetPriorAuthorityResponseMapperTest {
 

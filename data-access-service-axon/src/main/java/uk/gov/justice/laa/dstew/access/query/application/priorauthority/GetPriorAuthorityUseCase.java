@@ -5,8 +5,8 @@ import org.axonframework.messaging.queryhandling.gateway.QueryGateway;
 import org.springframework.stereotype.Service;
 import uk.gov.justice.laa.dstew.access.command.application.priorauthority.data.PriorAuthorityDataPayload;
 import uk.gov.justice.laa.dstew.access.command.application.priorauthority.data.PriorAuthorityDataStore;
+import uk.gov.justice.laa.dstew.access.content.priorauthority.PriorAuthorityResult;
 import uk.gov.justice.laa.dstew.access.exception.ResourceNotFoundException;
-import uk.gov.justice.laa.dstew.access.query.application.priorauthority.model.PriorAuthorityResult;
 
 /** Retrieves and hydrates the current Prior Authority submission. */
 @Service

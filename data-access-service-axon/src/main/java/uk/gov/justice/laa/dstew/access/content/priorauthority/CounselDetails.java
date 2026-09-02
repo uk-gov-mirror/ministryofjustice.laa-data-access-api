@@ -6,4 +6,4 @@ import uk.gov.justice.laa.dstew.access.ExcludeFromGeneratedCodeCoverage;
 /** Counsel details for a prior-authority application. */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @ExcludeFromGeneratedCodeCoverage
-public record CounselDetails(String counselType) {}
+public record CounselDetails(CounselType counselType) {}

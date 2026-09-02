@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import uk.gov.justice.laa.dstew.access.command.application.CreateApplicationCommand;
 import uk.gov.justice.laa.dstew.access.command.application.priorauthority.CreatePriorAuthorityCommand;
 import uk.gov.justice.laa.dstew.access.content.priorauthority.CounselDetails;
+import uk.gov.justice.laa.dstew.access.content.priorauthority.CounselType;
 import uk.gov.justice.laa.dstew.access.content.priorauthority.PriorAuthorityContent;
 import uk.gov.justice.laa.dstew.access.validation.JsonSchemaValidator;
 
@@ -54,7 +55,7 @@ class ContentSchemaValidationDispatchInterceptorTest {
                 "COUNSEL",
                 "Need specialist counsel",
                 null,
-                new CounselDetails("KINGS_COUNSEL_ALONE"),
+                new CounselDetails(CounselType.KINGS_COUNSEL_ALONE),
                 null),
             "{}",
             1,

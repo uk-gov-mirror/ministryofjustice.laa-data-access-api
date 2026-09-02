@@ -8,7 +8,9 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 import uk.gov.justice.laa.dstew.access.command.application.priorauthority.CreatePriorAuthorityCommand;
 import uk.gov.justice.laa.dstew.access.content.priorauthority.Apportionment;
+import uk.gov.justice.laa.dstew.access.content.priorauthority.BillingType;
 import uk.gov.justice.laa.dstew.access.content.priorauthority.CounselDetails;
+import uk.gov.justice.laa.dstew.access.content.priorauthority.CounselType;
 import uk.gov.justice.laa.dstew.access.content.priorauthority.DisbursementDetails;
 import uk.gov.justice.laa.dstew.access.content.priorauthority.ExpertCosts;
 import uk.gov.justice.laa.dstew.access.content.priorauthority.ExpertDetails;
@@ -69,7 +71,7 @@ public class CreatePriorAuthorityCommandMapper {
     }
 
     return new ExpertCosts(
-        enumName(costs.getBillingType()),
+        costs.getBillingType() == null ? null : BillingType.valueOf(costs.getBillingType().name()),
         toBigDecimal(costs.getHourlyRate()),
         toTimeRequested(costs.getTimeRequested()),
         toBigDecimal(costs.getTotalAmount()),
@@ -100,8 +102,10 @@ public class CreatePriorAuthorityCommandMapper {
     if (details == null) {
       return null;
     }
-
-    return new CounselDetails(enumName(details.getCounselType()));
+    return new CounselDetails(
+        details.getCounselType() == null
+            ? null
+            : CounselType.valueOf(details.getCounselType().name()));
   }
 
   private DisbursementDetails toDisbursementDetails(
