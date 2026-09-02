@@ -20,8 +20,7 @@ import org.mockito.InOrder;
 import org.mockito.Mockito;
 import uk.gov.justice.laa.dstew.access.command.RetryingCommandDispatcher;
 import uk.gov.justice.laa.dstew.access.query.SubscriptionProjectionGateway;
-import uk.gov.justice.laa.dstew.access.query.application.priorauthority.FindPriorAuthorityBySubmissionIdQuery;
-import uk.gov.justice.laa.dstew.access.query.application.priorauthority.PriorAuthorityReadModel;
+import uk.gov.justice.laa.dstew.access.query.application.priorauthority.PriorAuthorityExistsBySubmissionIdQuery;
 import uk.gov.justice.laa.dstew.access.validation.ValidationException;
 
 class CreatePriorAuthorityUseCaseTest {
@@ -40,8 +39,7 @@ class CreatePriorAuthorityUseCaseTest {
   @Test
   void givenValidApplication_whenProjectionConfirmed_thenReturnsTrue() {
     CreatePriorAuthorityCommand command = stubCommand();
-    when(projectionGateway.awaitProjection(any(), eq(PriorAuthorityReadModel.class), any()))
-        .thenReturn(true);
+    when(projectionGateway.awaitProjection(any(), eq(Boolean.class), any())).thenReturn(true);
 
     boolean result = useCase.execute(command);
 
@@ -51,8 +49,7 @@ class CreatePriorAuthorityUseCaseTest {
   @Test
   void givenValidApplication_whenProjectionTimeout_thenReturnsFalse() {
     CreatePriorAuthorityCommand command = stubCommand();
-    when(projectionGateway.awaitProjection(any(), eq(PriorAuthorityReadModel.class), any()))
-        .thenReturn(false);
+    when(projectionGateway.awaitProjection(any(), eq(Boolean.class), any())).thenReturn(false);
 
     boolean result = useCase.execute(command);
 
@@ -62,8 +59,7 @@ class CreatePriorAuthorityUseCaseTest {
   @Test
   void givenValidApplication_whenExecute_thenDispatchesValidationBeforeProjectionGateway() {
     CreatePriorAuthorityCommand command = stubCommand();
-    when(projectionGateway.awaitProjection(any(), eq(PriorAuthorityReadModel.class), any()))
-        .thenReturn(true);
+    when(projectionGateway.awaitProjection(any(), eq(Boolean.class), any())).thenReturn(true);
 
     useCase.execute(command);
 
@@ -77,15 +73,14 @@ class CreatePriorAuthorityUseCaseTest {
   @Test
   void givenValidApplication_whenExecute_thenPassesExactQueryAndModelClass() {
     CreatePriorAuthorityCommand command = stubCommand();
-    when(projectionGateway.awaitProjection(any(), eq(PriorAuthorityReadModel.class), any()))
-        .thenReturn(true);
+    when(projectionGateway.awaitProjection(any(), eq(Boolean.class), any())).thenReturn(true);
 
     useCase.execute(command);
 
     verify(projectionGateway)
         .awaitProjection(
-            eq(new FindPriorAuthorityBySubmissionIdQuery(command.submissionId())),
-            eq(PriorAuthorityReadModel.class),
+            eq(new PriorAuthorityExistsBySubmissionIdQuery(command.submissionId())),
+            eq(Boolean.class),
             any());
   }
 
@@ -99,7 +94,7 @@ class CreatePriorAuthorityUseCaseTest {
               return true;
             })
         .when(projectionGateway)
-        .awaitProjection(any(), eq(PriorAuthorityReadModel.class), any());
+        .awaitProjection(any(), eq(Boolean.class), any());
 
     useCase.execute(command);
 
