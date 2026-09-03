@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.math.BigDecimal;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import tools.jackson.core.type.TypeReference;
@@ -38,7 +39,8 @@ class PriorAuthoritySchemaTest {
                 "AB1 2CD",
                 new ExpertCosts("FIXED_RATE", null, null, BigDecimal.valueOf(900), false, null)),
             null,
-            null),
+            null,
+            List.of()),
         "PriorAuthority.json",
         1);
   }
@@ -51,7 +53,8 @@ class PriorAuthoritySchemaTest {
             "Need specialist counsel",
             null,
             new CounselDetails("KINGS_COUNSEL_ALONE"),
-            null),
+            null,
+            List.of()),
         "PriorAuthority.json",
         1);
   }
@@ -64,7 +67,8 @@ class PriorAuthoritySchemaTest {
             "Need interpreter costs",
             null,
             null,
-            new DisbursementDetails("Interpreter", BigDecimal.valueOf(150.25))),
+            new DisbursementDetails("Interpreter", BigDecimal.valueOf(150.25)),
+            List.of()),
         "PriorAuthority.json",
         1);
   }
@@ -72,7 +76,8 @@ class PriorAuthoritySchemaTest {
   @Test
   void givenExpertTypeWithoutExpertDetails_whenValidate_thenRejects() {
     assertRejected(
-        new PriorAuthorityContent("EXPERT", "Need expert", null, null, null), "expertDetails");
+        new PriorAuthorityContent("EXPERT", "Need expert", null, null, null, List.of()),
+        "expertDetails");
   }
 
   @Test
@@ -93,7 +98,8 @@ class PriorAuthoritySchemaTest {
                     false,
                     null)),
             null,
-            null),
+            null,
+            List.of()),
         "hourlyRate");
   }
 
@@ -110,7 +116,8 @@ class PriorAuthoritySchemaTest {
                 new ExpertCosts(
                     "HOURLY", BigDecimal.valueOf(300), null, BigDecimal.valueOf(900), false, null)),
             null,
-            null),
+            null,
+            List.of()),
         "timeRequested");
   }
 
@@ -126,7 +133,8 @@ class PriorAuthoritySchemaTest {
                 "AB1 2CD",
                 new ExpertCosts("FIXED_RATE", null, null, BigDecimal.valueOf(900), true, null)),
             null,
-            null),
+            null,
+            List.of()),
         "apportionment");
   }
 
@@ -134,7 +142,7 @@ class PriorAuthoritySchemaTest {
   void givenInvalidCounselEnum_whenValidate_thenRejects() {
     assertRejected(
         new PriorAuthorityContent(
-            "COUNSEL", "Need counsel", null, new CounselDetails("SILK"), null),
+            "COUNSEL", "Need counsel", null, new CounselDetails("SILK"), null, List.of()),
         "counselType");
   }
 
@@ -146,14 +154,15 @@ class PriorAuthoritySchemaTest {
             "Need disbursement",
             null,
             null,
-            new DisbursementDetails("Interpreter", null)),
+            new DisbursementDetails("Interpreter", null),
+            List.of()),
         "disbursementAmount");
   }
 
   @Test
   void givenInvalidType_whenValidate_thenRejects() {
     assertRejected(
-        new PriorAuthorityContent("OTHER", "Need something", null, null, null),
+        new PriorAuthorityContent("OTHER", "Need something", null, null, null, List.of()),
         "priorAuthorityType");
   }
 
@@ -161,7 +170,7 @@ class PriorAuthoritySchemaTest {
   void givenMissingJustification_whenValidate_thenRejects() {
     assertRejected(
         new PriorAuthorityContent(
-            "COUNSEL", null, null, new CounselDetails("KINGS_COUNSEL_ALONE"), null),
+            "COUNSEL", null, null, new CounselDetails("KINGS_COUNSEL_ALONE"), null, List.of()),
         "justification");
   }
 
@@ -185,13 +194,14 @@ class PriorAuthoritySchemaTest {
   @Test
   void givenCounselTypeWithoutCounselDetails_whenValidate_thenRejects() {
     assertRejected(
-        new PriorAuthorityContent("COUNSEL", "Need counsel", null, null, null), "counselDetails");
+        new PriorAuthorityContent("COUNSEL", "Need counsel", null, null, null, List.of()),
+        "counselDetails");
   }
 
   @Test
   void givenDisbursementTypeWithoutDisbursementDetails_whenValidate_thenRejects() {
     assertRejected(
-        new PriorAuthorityContent("DISBURSEMENT", "Need disbursement", null, null, null),
+        new PriorAuthorityContent("DISBURSEMENT", "Need disbursement", null, null, null, List.of()),
         "disbursementDetails");
   }
 
@@ -220,6 +230,7 @@ class PriorAuthoritySchemaTest {
                 true,
                 new Apportionment(2, BigDecimal.valueOf(450)))),
         null,
-        null);
+        null,
+        List.of());
   }
 }

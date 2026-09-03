@@ -2,6 +2,7 @@ package uk.gov.justice.laa.dstew.access.controller.application;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.JacksonException;
@@ -57,7 +58,8 @@ public class SavePriorAuthorityDraftCommandMapper {
         request.getJustification(),
         toExpertDetails(request.getExpertDetails()),
         toCounselDetails(request.getCounselDetails()),
-        toDisbursementDetails(request.getDisbursementDetails()));
+        toDisbursementDetails(request.getDisbursementDetails()),
+        List.of());
   }
 
   private ExpertDetails toExpertDetails(

@@ -23,6 +23,7 @@ import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
@@ -106,6 +107,42 @@ class SdsServiceTest {
     assertThatExceptionOfType(FileConflictException.class)
         .isThrownBy(() -> sdsService.saveFile(applicationId, file))
         .withMessage("File already exists");
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void
+      givenFolderAndDocumentId_whenSaveFileWithDocumentId_thenOverridesFilenameAndReturnsDocumentUploadResponse() {
+    UUID folderId = UUID.randomUUID();
+    UUID documentId = UUID.randomUUID();
+    MockMultipartFile file =
+        new MockMultipartFile(
+            "file", "real-name.pdf", "application/pdf", "test content".getBytes());
+    DocumentUploadResponse expectedResponse = mock(DocumentUploadResponse.class);
+
+    RestClient.RequestBodyUriSpec requestBodyUriSpec = mock(RestClient.RequestBodyUriSpec.class);
+    RestClient.RequestBodySpec requestBodySpec = mock(RestClient.RequestBodySpec.class);
+    RestClient.ResponseSpec responseSpec = mock(RestClient.ResponseSpec.class);
+
+    when(sdsRestClient.post()).thenReturn(requestBodyUriSpec);
+    when(requestBodyUriSpec.uri(endsWith("/save_file"))).thenReturn(requestBodySpec);
+    when(requestBodySpec.contentType(MediaType.MULTIPART_FORM_DATA)).thenReturn(requestBodySpec);
+    when(requestBodySpec.body(any(MultiValueMap.class))).thenReturn(requestBodySpec);
+    when(requestBodySpec.retrieve()).thenReturn(responseSpec);
+    when(responseSpec.onStatus(any(Predicate.class), any())).thenReturn(responseSpec);
+    when(sdsUploadResponseHandler.handle(responseSpec)).thenReturn(responseSpec);
+    when(responseSpec.body(DocumentUploadResponse.class)).thenReturn(expectedResponse);
+
+    DocumentUploadResponse actualResponse = sdsService.saveFile(folderId, documentId, file);
+
+    assertThat(actualResponse).isEqualTo(expectedResponse);
+
+    ArgumentCaptor<MultiValueMap<String, HttpEntity<?>>> bodyCaptor =
+        ArgumentCaptor.forClass(MultiValueMap.class);
+    verify(requestBodySpec).body(bodyCaptor.capture());
+    HttpEntity<?> filePart = bodyCaptor.getValue().getFirst("file");
+    assertThat(filePart.getHeaders().getContentDisposition().getFilename())
+        .isEqualTo(documentId.toString());
   }
 
   @Test

@@ -112,3 +112,16 @@ components:
           type: string
           format: date-time
 
+    AttachPriorAuthorityDocumentResponse:
+      type: object
+      required:
+        - documentId
+        - uploadedAt
+      properties:
+        documentId:
+          type: string
+          format: uuid
+        uploadedAt:
+          type: string
+          format: date-time
+

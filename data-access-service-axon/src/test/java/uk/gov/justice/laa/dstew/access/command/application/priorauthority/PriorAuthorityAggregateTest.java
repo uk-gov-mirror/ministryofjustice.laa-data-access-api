@@ -67,7 +67,8 @@ class PriorAuthorityAggregateTest {
     UUID submissionId = UUID.randomUUID();
     UUID applicationId = UUID.randomUUID();
     Instant occurredAt = Instant.parse("2026-08-01T10:00:00Z");
-    PriorAuthorityContent content = new PriorAuthorityContent("EXPERT", null, null, null, null);
+    PriorAuthorityContent content =
+        new PriorAuthorityContent("EXPERT", null, null, null, null, List.of());
     String serialisedRequest = "{\"priorAuthorityType\":\"EXPERT\"}";
     String fingerprint = PayloadFingerprint.compute(serialisedRequest);
 
@@ -141,7 +142,7 @@ class PriorAuthorityAggregateTest {
         new CreatePriorAuthorityCommand(
             submissionId,
             applicationId,
-            new PriorAuthorityContent("EXPERT", null, null, null, null),
+            new PriorAuthorityContent("EXPERT", null, null, null, null, List.of()),
             serialisedRequest,
             1,
             "pa-schema",
@@ -175,7 +176,7 @@ class PriorAuthorityAggregateTest {
         new CreatePriorAuthorityCommand(
             submissionId,
             applicationId,
-            new PriorAuthorityContent("COUNSEL", null, null, null, null),
+            new PriorAuthorityContent("COUNSEL", null, null, null, null, List.of()),
             "{\"priorAuthorityType\":\"COUNSEL\"}",
             1,
             "pa-schema",
@@ -203,7 +204,8 @@ class PriorAuthorityAggregateTest {
     UUID submissionId = UUID.randomUUID();
     UUID applicationId = UUID.randomUUID();
     Instant occurredAt = Instant.parse("2026-08-01T10:00:00Z");
-    PriorAuthorityContent content = new PriorAuthorityContent(null, null, null, null, null);
+    PriorAuthorityContent content =
+        new PriorAuthorityContent(null, null, null, null, null, List.of());
     String serialisedRequest = "{}";
     String fingerprint = PayloadFingerprint.compute(serialisedRequest);
 
@@ -262,7 +264,7 @@ class PriorAuthorityAggregateTest {
         new PriorAuthorityDataPayload(
             submissionId,
             applicationId,
-            new PriorAuthorityContent(null, null, null, null, null),
+            new PriorAuthorityContent(null, null, null, null, null, List.of()),
             firstRequest,
             occurredAt);
 
@@ -275,7 +277,7 @@ class PriorAuthorityAggregateTest {
         new SavePriorAuthorityDraftCommand(
             submissionId,
             null,
-            new PriorAuthorityContent(null, "need expert", null, null, null),
+            new PriorAuthorityContent(null, "need expert", null, null, null, List.of()),
             secondRequest,
             1,
             "PriorAuthority.json",
@@ -295,7 +297,8 @@ class PriorAuthorityAggregateTest {
     Instant submittedAt = Instant.parse("2026-08-02T10:00:00Z");
     String serialisedRequest = "{\"priorAuthorityType\":\"EXPERT\"}";
     String fingerprint = PayloadFingerprint.compute(serialisedRequest);
-    PriorAuthorityContent content = new PriorAuthorityContent("EXPERT", null, null, null, null);
+    PriorAuthorityContent content =
+        new PriorAuthorityContent("EXPERT", null, null, null, null, List.of());
     PriorAuthorityDataPayload draftPayload =
         new PriorAuthorityDataPayload(
             submissionId, applicationId, content, serialisedRequest, startedAt);
@@ -333,7 +336,8 @@ class PriorAuthorityAggregateTest {
     Instant submittedAt = Instant.parse("2026-08-02T10:00:00Z");
     String serialisedRequest = "{\"priorAuthorityType\":\"EXPERT\"}";
     String fingerprint = PayloadFingerprint.compute(serialisedRequest);
-    PriorAuthorityContent content = new PriorAuthorityContent("EXPERT", null, null, null, null);
+    PriorAuthorityContent content =
+        new PriorAuthorityContent("EXPERT", null, null, null, null, List.of());
     PriorAuthorityDataPayload draftPayload =
         new PriorAuthorityDataPayload(
             submissionId, applicationId, content, serialisedRequest, startedAt);
@@ -384,7 +388,7 @@ class PriorAuthorityAggregateTest {
         new SavePriorAuthorityDraftCommand(
             submissionId,
             null,
-            new PriorAuthorityContent(null, null, null, null, null),
+            new PriorAuthorityContent(null, null, null, null, null, List.of()),
             "{}",
             1,
             "PriorAuthority.json",
@@ -415,5 +419,132 @@ class PriorAuthorityAggregateTest {
         .then()
         .exception(PriorAuthorityNotInProgressException.class)
         .noEvents();
+  }
+
+  @Test
+  void givenDraftInProgress_whenAttachDocument_thenAppendsDocumentAndEmitsAttachedEvent() {
+    UUID submissionId = UUID.randomUUID();
+    UUID applicationId = UUID.randomUUID();
+    UUID documentId = UUID.randomUUID();
+    Instant startedAt = Instant.parse("2026-08-01T10:00:00Z");
+    Instant attachedAt = Instant.parse("2026-08-02T10:00:00Z");
+    String serialisedRequest = "{\"priorAuthorityType\":\"EXPERT\"}";
+    String fingerprint = PayloadFingerprint.compute(serialisedRequest);
+    PriorAuthorityDataPayload draftPayload =
+        new PriorAuthorityDataPayload(
+            submissionId,
+            applicationId,
+            new PriorAuthorityContent("EXPERT", null, null, null, null, List.of()),
+            serialisedRequest,
+            startedAt);
+
+    PriorAuthorityDraftStartedEvent existingEvent =
+        new PriorAuthorityDraftStartedEvent(submissionId, applicationId, fingerprint, 1, startedAt);
+
+    when(draftStore.find(submissionId)).thenReturn(Optional.of(draftPayload));
+
+    AttachPriorAuthorityDocumentCommand command =
+        new AttachPriorAuthorityDocumentCommand(
+            submissionId,
+            documentId,
+            "evidence.pdf",
+            1024L,
+            "pdf",
+            "application/pdf",
+            "checksum-123",
+            attachedAt);
+
+    fixture
+        .given()
+        .events(existingEvent)
+        .when()
+        .command(command)
+        .then()
+        .events(
+            new PriorAuthorityDocumentAttachedEvent(
+                submissionId,
+                documentId,
+                1024L,
+                "pdf",
+                "application/pdf",
+                "checksum-123",
+                attachedAt));
+
+    verify(draftStore)
+        .appendDocument(
+            eq(submissionId),
+            eq(
+                new uk.gov.justice.laa.dstew.access.content.priorauthority.PriorAuthorityDocument(
+                    documentId, "evidence.pdf")),
+            eq(attachedAt));
+  }
+
+  @Test
+  void givenNoAggregate_whenAttachDocument_thenThrowsNotInProgressAndNeverCallsAppendDocument() {
+    UUID submissionId = UUID.randomUUID();
+
+    AttachPriorAuthorityDocumentCommand command =
+        new AttachPriorAuthorityDocumentCommand(
+            submissionId,
+            UUID.randomUUID(),
+            "evidence.pdf",
+            1024L,
+            "pdf",
+            "application/pdf",
+            "checksum-123",
+            Instant.now());
+
+    fixture
+        .given()
+        .noPriorActivity()
+        .when()
+        .command(command)
+        .then()
+        .exception(PriorAuthorityNotInProgressException.class)
+        .noEvents();
+
+    verify(draftStore, never()).appendDocument(any(), any(), any());
+  }
+
+  @Test
+  void
+      givenAggregateExistsButNoDraftInProgress_whenAttachDocument_thenThrowsNotInProgressAndNeverCallsAppendDocument() {
+    UUID submissionId = UUID.randomUUID();
+    UUID applicationId = UUID.randomUUID();
+    Instant occurredAt = Instant.parse("2026-08-01T10:00:00Z");
+    String serialisedRequest = "{\"priorAuthorityType\":\"EXPERT\"}";
+    String fingerprint = PayloadFingerprint.compute(serialisedRequest);
+
+    PriorAuthorityCreatedEvent existingEvent =
+        new PriorAuthorityCreatedEvent(
+            submissionId,
+            applicationId,
+            0L,
+            fingerprint,
+            PriorAuthorityStatus.PENDING.name(),
+            1,
+            occurredAt);
+
+    AttachPriorAuthorityDocumentCommand command =
+        new AttachPriorAuthorityDocumentCommand(
+            submissionId,
+            UUID.randomUUID(),
+            "evidence.pdf",
+            1024L,
+            "pdf",
+            "application/pdf",
+            "checksum-123",
+            Instant.now());
+
+    fixture
+        .given()
+        .events(existingEvent)
+        .when()
+        .command(command)
+        .then()
+        .exception(PriorAuthorityNotInProgressException.class)
+        .noEvents();
+
+    verify(draftStore, never()).appendDocument(any(), any(), any());
   }
 }

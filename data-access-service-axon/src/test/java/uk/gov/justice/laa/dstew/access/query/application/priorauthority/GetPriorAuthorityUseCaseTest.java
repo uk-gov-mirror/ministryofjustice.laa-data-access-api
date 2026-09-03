@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -61,7 +62,12 @@ class GetPriorAuthorityUseCaseTest {
             .build();
     PriorAuthorityContent content =
         new PriorAuthorityContent(
-            "COUNSEL", "Counsel is required", null, new CounselDetails("TWO_JUNIOR_COUNSEL"), null);
+            "COUNSEL",
+            "Counsel is required",
+            null,
+            new CounselDetails("TWO_JUNIOR_COUNSEL"),
+            null,
+            List.of());
     when(queryGateway.query(
             any(FindPriorAuthorityBySubmissionIdQuery.class), eq(PriorAuthorityReadModel.class)))
         .thenReturn(CompletableFuture.completedFuture(readModel));
@@ -117,13 +123,14 @@ class GetPriorAuthorityUseCaseTest {
                 "Expert is required",
                 new ExpertDetails("PSYCHIATRIST", "Jane Doe", "AB1 2CD", null),
                 null,
-                null),
+                null,
+                List.of()),
             PriorAuthorityType.EXPERT,
             true,
             false,
             false),
         Arguments.of(
-            new PriorAuthorityContent("EXPERT", "Expert is required", null, null, null),
+            new PriorAuthorityContent("EXPERT", "Expert is required", null, null, null, List.of()),
             PriorAuthorityType.EXPERT,
             false,
             false,
@@ -134,13 +141,15 @@ class GetPriorAuthorityUseCaseTest {
                 "Counsel is required",
                 null,
                 new CounselDetails("TWO_JUNIOR_COUNSEL"),
-                null),
+                null,
+                List.of()),
             PriorAuthorityType.COUNSEL,
             false,
             true,
             false),
         Arguments.of(
-            new PriorAuthorityContent("COUNSEL", "Counsel is required", null, null, null),
+            new PriorAuthorityContent(
+                "COUNSEL", "Counsel is required", null, null, null, List.of()),
             PriorAuthorityType.COUNSEL,
             false,
             false,
@@ -151,13 +160,15 @@ class GetPriorAuthorityUseCaseTest {
                 "Disbursement is required",
                 null,
                 null,
-                new DisbursementDetails("Travel", BigDecimal.TEN)),
+                new DisbursementDetails("Travel", BigDecimal.TEN),
+                List.of()),
             PriorAuthorityType.DISBURSEMENT,
             false,
             false,
             true),
         Arguments.of(
-            new PriorAuthorityContent("DISBURSEMENT", "Disbursement is required", null, null, null),
+            new PriorAuthorityContent(
+                "DISBURSEMENT", "Disbursement is required", null, null, null, List.of()),
             PriorAuthorityType.DISBURSEMENT,
             false,
             false,
@@ -168,13 +179,18 @@ class GetPriorAuthorityUseCaseTest {
                 "Disbursement is required",
                 null,
                 null,
-                new DisbursementDetails("Travel", BigDecimal.TEN)),
+                new DisbursementDetails("Travel", BigDecimal.TEN),
+                List.of()),
             null,
             false,
             false,
             false),
         Arguments.of(
-            new PriorAuthorityContent(null, "", null, null, null), null, false, false, false));
+            new PriorAuthorityContent(null, "", null, null, null, List.of()),
+            null,
+            false,
+            false,
+            false));
   }
 
   @Test
@@ -192,7 +208,8 @@ class GetPriorAuthorityUseCaseTest {
                 "AB1 2CD",
                 new ExpertCosts("FIXED_RATE", null, null, BigDecimal.TEN, false, null)),
             null,
-            null);
+            null,
+            List.of());
     when(queryGateway.query(
             any(FindPriorAuthorityBySubmissionIdQuery.class), eq(PriorAuthorityReadModel.class)))
         .thenReturn(CompletableFuture.completedFuture(readModel));
@@ -232,7 +249,8 @@ class GetPriorAuthorityUseCaseTest {
             "Expert is required",
             new ExpertDetails("PSYCHIATRIST", "Jane Doe", "AB1 2CD", null),
             null,
-            null);
+            null,
+            List.of());
     when(queryGateway.query(
             any(FindPriorAuthorityBySubmissionIdQuery.class), eq(PriorAuthorityReadModel.class)))
         .thenReturn(CompletableFuture.completedFuture(null));

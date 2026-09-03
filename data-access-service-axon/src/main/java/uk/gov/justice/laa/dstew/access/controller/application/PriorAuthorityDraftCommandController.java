@@ -3,16 +3,21 @@ package uk.gov.justice.laa.dstew.access.controller.application;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import java.net.URI;
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.UUID;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import uk.gov.justice.laa.dstew.access.api.PriorAuthorityDraftCommandApi;
+import uk.gov.justice.laa.dstew.access.command.application.priorauthority.AttachPriorAuthorityDocumentUseCase;
 import uk.gov.justice.laa.dstew.access.command.application.priorauthority.SavePriorAuthorityDraftCommand;
 import uk.gov.justice.laa.dstew.access.command.application.priorauthority.SavePriorAuthorityDraftUseCase;
 import uk.gov.justice.laa.dstew.access.command.application.priorauthority.SubmitPriorAuthorityDraftCommand;
 import uk.gov.justice.laa.dstew.access.command.application.priorauthority.SubmitPriorAuthorityDraftUseCase;
+import uk.gov.justice.laa.dstew.access.model.AttachPriorAuthorityDocumentResponse;
 import uk.gov.justice.laa.dstew.access.model.SavePriorAuthorityDraftRequest;
 import uk.gov.justice.laa.dstew.access.model.SavePriorAuthorityDraftResponse;
 import uk.gov.justice.laa.dstew.access.model.ServiceName;
@@ -26,15 +31,18 @@ public class PriorAuthorityDraftCommandController implements PriorAuthorityDraft
 
   private final SavePriorAuthorityDraftUseCase saveUseCase;
   private final SubmitPriorAuthorityDraftUseCase submitUseCase;
+  private final AttachPriorAuthorityDocumentUseCase attachUseCase;
   private final SavePriorAuthorityDraftCommandMapper commandMapper;
 
   /** Creates the command adapter. */
   public PriorAuthorityDraftCommandController(
       SavePriorAuthorityDraftUseCase saveUseCase,
       SubmitPriorAuthorityDraftUseCase submitUseCase,
+      AttachPriorAuthorityDocumentUseCase attachUseCase,
       SavePriorAuthorityDraftCommandMapper commandMapper) {
     this.saveUseCase = saveUseCase;
     this.submitUseCase = submitUseCase;
+    this.attachUseCase = attachUseCase;
     this.commandMapper = commandMapper;
   }
 
@@ -97,5 +105,18 @@ public class PriorAuthorityDraftCommandController implements PriorAuthorityDraft
     return projected
         ? ResponseEntity.created(location).body(response)
         : ResponseEntity.accepted().location(location).body(response);
+  }
+
+  /** Attaches a supporting evidence document to an in-progress Prior Authority draft. */
+  @Override
+  @LogMethodArguments
+  @LogMethodResponse
+  @Operation(security = @SecurityRequirement(name = "BearerAuth"))
+  public ResponseEntity<AttachPriorAuthorityDocumentResponse> attachPriorAuthorityDocument(
+      ServiceName serviceName, UUID priorAuthorityId, MultipartFile file) {
+    UUID documentId = attachUseCase.attach(priorAuthorityId, file, Instant.now());
+    AttachPriorAuthorityDocumentResponse response =
+        new AttachPriorAuthorityDocumentResponse(documentId, OffsetDateTime.now());
+    return ResponseEntity.status(HttpStatus.CREATED).body(response);
   }
 }

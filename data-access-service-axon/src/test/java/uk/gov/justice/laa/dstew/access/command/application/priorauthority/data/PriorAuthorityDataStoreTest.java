@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,7 +34,8 @@ class PriorAuthorityDataStoreTest {
       givenPayload_whenAppended_thenStoresExactIdApplicationIdPayloadHashAndTimestampAndReturns64CharFingerprint() {
     UUID submissionId = UUID.randomUUID();
     UUID applicationId = UUID.randomUUID();
-    PriorAuthorityContent content = new PriorAuthorityContent("EXPERT", null, null, null, null);
+    PriorAuthorityContent content =
+        new PriorAuthorityContent("EXPERT", null, null, null, null, List.of());
     Instant occurredAt = Instant.parse("2026-08-01T10:00:00Z");
     PriorAuthorityDataPayload payload =
         new PriorAuthorityDataPayload(

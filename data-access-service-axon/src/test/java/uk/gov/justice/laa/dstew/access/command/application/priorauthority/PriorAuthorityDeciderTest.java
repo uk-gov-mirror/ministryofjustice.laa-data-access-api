@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -25,7 +26,7 @@ class PriorAuthorityDeciderTest {
         new CreatePriorAuthorityCommand(
             submissionId,
             applicationId,
-            new PriorAuthorityContent("EXPERT", null, null, null, null),
+            new PriorAuthorityContent("EXPERT", null, null, null, null, List.of()),
             "{}",
             1,
             "pa-schema",
@@ -108,7 +109,7 @@ class PriorAuthorityDeciderTest {
         new SavePriorAuthorityDraftCommand(
             submissionId,
             applicationId,
-            new PriorAuthorityContent(null, null, null, null, null),
+            new PriorAuthorityContent(null, null, null, null, null, List.of()),
             "{}",
             1,
             "PriorAuthority.json",

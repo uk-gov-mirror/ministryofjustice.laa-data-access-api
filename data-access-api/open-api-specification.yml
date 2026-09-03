@@ -45,6 +45,8 @@ paths:
     $ref: "./open-api-prior-authority/resources.yml#/paths/~1api~1v0~1prior-authorities~1{priorAuthorityId}"
   /api/v0/prior-authorities/{priorAuthorityId}/submit:
     $ref: "./open-api-prior-authority/resources.yml#/paths/~1api~1v0~1prior-authorities~1{priorAuthorityId}~1submit"
+  /api/v0/prior-authorities/{priorAuthorityId}/documents:
+    $ref: "./open-api-prior-authority/resources.yml#/paths/~1api~1v0~1prior-authorities~1{priorAuthorityId}~1documents"
   /api/v0/sds/health:
     $ref: "./open-api-applications/resources.yml#/paths/~1api~1v0~1sds~1health"
 
@@ -123,6 +125,8 @@ components:
       $ref: "./open-api-prior-authority/components.yml#/components/schemas/SavePriorAuthorityDraftRequest"
     SavePriorAuthorityDraftResponse:
       $ref: "./open-api-prior-authority/components.yml#/components/schemas/SavePriorAuthorityDraftResponse"
+    AttachPriorAuthorityDocumentResponse:
+      $ref: "./open-api-prior-authority/components.yml#/components/schemas/AttachPriorAuthorityDocumentResponse"
     SubmitPriorAuthorityDraftResponse:
       $ref: "./open-api-prior-authority/components.yml#/components/schemas/SubmitPriorAuthorityDraftResponse"
     PriorAuthorityResponse:

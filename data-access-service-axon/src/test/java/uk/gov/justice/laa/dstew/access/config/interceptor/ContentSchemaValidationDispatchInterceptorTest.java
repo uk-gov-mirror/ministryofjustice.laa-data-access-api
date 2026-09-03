@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import static uk.gov.justice.laa.dstew.access.testutils.ApplicationCreateRequestFixture.validApplicationContent;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import org.axonframework.messaging.commandhandling.CommandMessage;
 import org.axonframework.messaging.commandhandling.GenericCommandMessage;
@@ -55,7 +56,8 @@ class ContentSchemaValidationDispatchInterceptorTest {
                 "Need specialist counsel",
                 null,
                 new CounselDetails("KINGS_COUNSEL_ALONE"),
-                null),
+                null,
+                List.of()),
             "{}",
             1,
             "PriorAuthority.json",

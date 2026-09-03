@@ -20,6 +20,22 @@
     },
     "disbursementDetails": {
       "$ref": "../common/DisbursementDetails.json"
+    },
+    "documents": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["documentId", "fileName"],
+        "properties": {
+          "documentId": {
+            "type": "string"
+          },
+          "fileName": {
+            "type": "string"
+          }
+        }
+      }
     }
   },
   "allOf": [

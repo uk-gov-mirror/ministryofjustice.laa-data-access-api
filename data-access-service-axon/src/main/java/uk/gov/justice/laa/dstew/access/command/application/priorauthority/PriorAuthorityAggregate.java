@@ -10,6 +10,7 @@ import org.axonframework.messaging.eventhandling.gateway.EventAppender;
 import uk.gov.justice.laa.dstew.access.command.application.priorauthority.data.PriorAuthorityDataPayload;
 import uk.gov.justice.laa.dstew.access.command.application.priorauthority.data.PriorAuthorityDataStore;
 import uk.gov.justice.laa.dstew.access.command.application.priorauthority.data.PriorAuthorityDraftStore;
+import uk.gov.justice.laa.dstew.access.content.priorauthority.PriorAuthorityDocument;
 import uk.gov.justice.laa.dstew.access.exception.PriorAuthorityNotInProgressException;
 import uk.gov.justice.laa.dstew.access.util.PayloadFingerprint;
 import uk.gov.justice.laa.dstew.access.validation.JsonSchemaValidator;
@@ -109,6 +110,29 @@ public class PriorAuthorityAggregate {
         command.occurredAt());
     eventAppender.append(PriorAuthorityDecider.decideSubmit(command, state));
     draftStore.delete(command.submissionId());
+  }
+
+  @CommandHandler
+  void handle(
+      AttachPriorAuthorityDocumentCommand command,
+      PriorAuthorityDraftStore draftStore,
+      EventAppender eventAppender) {
+    if (this.submissionId == null || draftStore.find(command.submissionId()).isEmpty()) {
+      throw new PriorAuthorityNotInProgressException(command.submissionId());
+    }
+    draftStore.appendDocument(
+        command.submissionId(),
+        new PriorAuthorityDocument(command.documentId(), command.fileName()),
+        command.occurredAt());
+    eventAppender.append(
+        new PriorAuthorityDocumentAttachedEvent(
+            command.submissionId(),
+            command.documentId(),
+            command.size(),
+            command.extension(),
+            command.contentType(),
+            command.checksum(),
+            command.occurredAt()));
   }
 
   @EventSourcingHandler

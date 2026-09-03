@@ -13,12 +13,16 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
+import org.springframework.web.multipart.MultipartFile;
+import uk.gov.justice.laa.dstew.access.command.application.priorauthority.AttachPriorAuthorityDocumentUseCase;
 import uk.gov.justice.laa.dstew.access.command.application.priorauthority.SavePriorAuthorityDraftCommand;
 import uk.gov.justice.laa.dstew.access.command.application.priorauthority.SavePriorAuthorityDraftUseCase;
 import uk.gov.justice.laa.dstew.access.command.application.priorauthority.SubmitPriorAuthorityDraftCommand;
 import uk.gov.justice.laa.dstew.access.command.application.priorauthority.SubmitPriorAuthorityDraftUseCase;
+import uk.gov.justice.laa.dstew.access.model.AttachPriorAuthorityDocumentResponse;
 import uk.gov.justice.laa.dstew.access.model.SavePriorAuthorityDraftRequest;
 import uk.gov.justice.laa.dstew.access.model.SavePriorAuthorityDraftResponse;
 import uk.gov.justice.laa.dstew.access.model.SubmitPriorAuthorityDraftResponse;
@@ -28,6 +32,7 @@ class PriorAuthorityDraftCommandControllerTest {
 
   private SavePriorAuthorityDraftUseCase saveUseCase;
   private SubmitPriorAuthorityDraftUseCase submitUseCase;
+  private AttachPriorAuthorityDocumentUseCase attachUseCase;
   private SavePriorAuthorityDraftCommandMapper commandMapper;
   private PriorAuthorityDraftCommandController controller;
 
@@ -37,9 +42,11 @@ class PriorAuthorityDraftCommandControllerTest {
         new ServletRequestAttributes(new MockHttpServletRequest()));
     saveUseCase = mock(SavePriorAuthorityDraftUseCase.class);
     submitUseCase = mock(SubmitPriorAuthorityDraftUseCase.class);
+    attachUseCase = mock(AttachPriorAuthorityDocumentUseCase.class);
     commandMapper = mock(SavePriorAuthorityDraftCommandMapper.class);
     controller =
-        new PriorAuthorityDraftCommandController(saveUseCase, submitUseCase, commandMapper);
+        new PriorAuthorityDraftCommandController(
+            saveUseCase, submitUseCase, attachUseCase, commandMapper);
   }
 
   @AfterEach
@@ -129,5 +136,30 @@ class PriorAuthorityDraftCommandControllerTest {
         controller.submitPriorAuthorityDraft(null, submissionId);
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
+  }
+
+  @Test
+  void givenValidFile_whenAttachPriorAuthorityDocument_thenDelegatesToUseCaseAndReturnsCreated() {
+    UUID priorAuthorityId = UUID.randomUUID();
+    UUID documentId = UUID.randomUUID();
+    MultipartFile file =
+        new MockMultipartFile("file", "evidence.pdf", "application/pdf", "content".getBytes());
+    when(attachUseCase.attach(
+            org.mockito.ArgumentMatchers.eq(priorAuthorityId),
+            org.mockito.ArgumentMatchers.eq(file),
+            org.mockito.ArgumentMatchers.any(Instant.class)))
+        .thenReturn(documentId);
+
+    ResponseEntity<AttachPriorAuthorityDocumentResponse> response =
+        controller.attachPriorAuthorityDocument(null, priorAuthorityId, file);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    assertThat(response.getBody()).isNotNull();
+    assertThat(response.getBody().getDocumentId()).isEqualTo(documentId);
+    verify(attachUseCase)
+        .attach(
+            org.mockito.ArgumentMatchers.eq(priorAuthorityId),
+            org.mockito.ArgumentMatchers.eq(file),
+            org.mockito.ArgumentMatchers.any(Instant.class));
   }
 }

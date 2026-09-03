@@ -89,6 +89,39 @@ public class SdsService {
   }
 
   /**
+   * Save a file in the SDS service under an explicit, caller-supplied document ID rather than the
+   * file's own name — used where the real filename must never reach SDS or its logs (e.g. Prior
+   * Authority evidence, keyed by a server-minted document ID instead).
+   *
+   * @param folderId the folder/prefix the file is stored under
+   * @param documentId the caller-minted document ID, used as both the SDS object key and filename
+   * @param file the file to be saved
+   * @return the file URL response from SDS
+   */
+  public DocumentUploadResponse saveFile(UUID folderId, UUID documentId, MultipartFile file) {
+    Map<String, String> bodyMap = new HashMap<>();
+    bodyMap.put(BUCKET_NAME_FIELD, bucketName);
+    bodyMap.put(FOLDER_FIELD, folderId.toString());
+
+    MultipartBodyBuilder builder = buildMultipartBody(file, bodyMap, documentId.toString());
+
+    return sdsUploadResponseHandler
+        .handle(
+            sdsRestClient
+                .post()
+                .uri(SAVE_FILE_ENDPOINT)
+                .contentType(MULTIPART_FORM_DATA)
+                .body(builder.build())
+                .retrieve()
+                .onStatus(
+                    status -> status.isSameCodeAs(HttpStatus.CONFLICT),
+                    (request, response) -> {
+                      throw new FileConflictException("File already exists in SDS");
+                    }))
+        .body(DocumentUploadResponse.class);
+  }
+
+  /**
    * Save or update a file in the SDS service.
    *
    * @param applicationId the application ID used as folder name
@@ -198,9 +231,18 @@ public class SdsService {
 
   private MultipartBodyBuilder buildMultipartBody(
       MultipartFile file, Map<String, String> bodyFields) {
+    return buildMultipartBody(file, bodyFields, null);
+  }
+
+  private MultipartBodyBuilder buildMultipartBody(
+      MultipartFile file, Map<String, String> bodyFields, String filenameOverride) {
     try {
       MultipartBodyBuilder builder = new MultipartBodyBuilder();
-      builder.part("file", file.getResource()).contentType(APPLICATION_OCTET_STREAM);
+      MultipartBodyBuilder.PartBuilder part =
+          builder.part("file", file.getResource()).contentType(APPLICATION_OCTET_STREAM);
+      if (filenameOverride != null) {
+        part.filename(filenameOverride);
+      }
       builder.part("body", objectMapper.writeValueAsString(bodyFields));
       return builder;
     } catch (JacksonException e) {
