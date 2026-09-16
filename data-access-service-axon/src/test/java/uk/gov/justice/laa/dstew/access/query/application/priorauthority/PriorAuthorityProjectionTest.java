@@ -26,6 +26,7 @@ import uk.gov.justice.laa.dstew.access.command.application.priorauthority.data.P
 import uk.gov.justice.laa.dstew.access.command.application.priorauthority.data.PriorAuthorityDataStore;
 import uk.gov.justice.laa.dstew.access.command.application.priorauthority.data.PriorAuthorityDraftStore;
 import uk.gov.justice.laa.dstew.access.command.application.priorauthority.decision.PriorAuthorityDecisionMadeEvent;
+import uk.gov.justice.laa.dstew.access.command.application.priorauthority.document.UploadedDocumentStore;
 import uk.gov.justice.laa.dstew.access.content.priorauthority.Apportionment;
 import uk.gov.justice.laa.dstew.access.content.priorauthority.BillingType;
 import uk.gov.justice.laa.dstew.access.content.priorauthority.CounselDetails;
@@ -44,6 +45,7 @@ class PriorAuthorityProjectionTest {
   @Mock private PriorAuthorityReadRepository repository;
   @Mock private PriorAuthorityDataStore dataStore;
   @Mock private PriorAuthorityDraftStore draftStore;
+  @Mock private UploadedDocumentStore uploadedDocumentStore;
   @Mock private QueryUpdateEmitter queryUpdateEmitter;
   @InjectMocks private PriorAuthorityProjection projection;
 

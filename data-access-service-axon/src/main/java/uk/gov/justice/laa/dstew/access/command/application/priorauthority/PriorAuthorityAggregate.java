@@ -1,10 +1,7 @@
 package uk.gov.justice.laa.dstew.access.command.application.priorauthority;
 
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.UUID;
-import java.util.stream.IntStream;
 import org.axonframework.eventsourcing.annotation.EventSourcingHandler;
 import org.axonframework.eventsourcing.annotation.reflection.EntityCreator;
 import org.axonframework.extension.spring.stereotype.EventSourced;
@@ -17,6 +14,7 @@ import uk.gov.justice.laa.dstew.access.command.application.priorauthority.data.P
 import uk.gov.justice.laa.dstew.access.command.application.priorauthority.data.PriorAuthorityDraftStore;
 import uk.gov.justice.laa.dstew.access.command.application.priorauthority.decision.MakePriorAuthorityDecisionCommand;
 import uk.gov.justice.laa.dstew.access.command.application.priorauthority.decision.PriorAuthorityDecisionMadeEvent;
+import uk.gov.justice.laa.dstew.access.command.application.priorauthority.document.UploadedDocumentStore;
 import uk.gov.justice.laa.dstew.access.command.worklist.WorkItemAssigned;
 import uk.gov.justice.laa.dstew.access.command.worklist.WorkItemAssignmentConflictException;
 import uk.gov.justice.laa.dstew.access.command.worklist.WorkItemType;
@@ -88,10 +86,11 @@ public class PriorAuthorityAggregate {
   UUID handle(
       PriorAuthorityDocumentUploadCommand command,
       PriorAuthorityDraftStore draftStore,
+      UploadedDocumentStore uploadedDocumentStore,
       EventAppender eventAppender) {
-    PriorAuthorityDataPayload existingDraft = requireDraft(command.priorAuthorityId(), draftStore);
-    List<PriorAuthorityDocument> existingDocuments = copyUploadedDocuments(existingDraft);
-    existingDocuments.add(
+    requireDraft(command.priorAuthorityId(), draftStore);
+    uploadedDocumentStore.save(
+        command.priorAuthorityId(),
         new PriorAuthorityDocument(
             command.documentId(),
             null,
@@ -102,20 +101,6 @@ public class PriorAuthorityAggregate {
             command.occurredAt(),
             command.sourceService(),
             command.checksum()));
-
-    PriorAuthorityContent updatedContent =
-        existingDraft.content().withUploadedDocuments(List.copyOf(existingDocuments));
-
-    PriorAuthorityDataPayload updatedPayload =
-        existingDraft
-            .withContent(updatedContent)
-            .withSerialisedRequest(command.serialisedRequest());
-    draftStore.upsert(
-        command.priorAuthorityId(),
-        existingDraft.applicationId(),
-        updatedPayload,
-        command.serialisedRequest(),
-        command.occurredAt());
     eventAppender.append(
         PriorAuthorityDecider.decideDocumentUploaded(command, state.applicationId));
     return command.documentId();
@@ -125,29 +110,10 @@ public class PriorAuthorityAggregate {
   UUID handle(
       PriorAuthorityDocumentDeleteCommand command,
       PriorAuthorityDraftStore draftStore,
+      UploadedDocumentStore uploadedDocumentStore,
       EventAppender eventAppender) {
-    PriorAuthorityDataPayload existingDraft = requireDraft(command.priorAuthorityId(), draftStore);
-    List<PriorAuthorityDocument> updatedDocuments = copyUploadedDocuments(existingDraft);
-    boolean removed =
-        updatedDocuments.removeIf(document -> document.documentId().equals(command.documentId()));
-    if (!removed) {
-      throw new ResourceNotFoundException(
-          "Document %s not found for Prior Authority %s"
-              .formatted(command.documentId(), command.priorAuthorityId()));
-    }
-
-    PriorAuthorityContent updatedContent =
-        existingDraft.content().withUploadedDocuments(List.copyOf(updatedDocuments));
-    PriorAuthorityDataPayload updatedPayload =
-        existingDraft
-            .withContent(updatedContent)
-            .withSerialisedRequest(command.serialisedRequest());
-    draftStore.upsert(
-        command.priorAuthorityId(),
-        existingDraft.applicationId(),
-        updatedPayload,
-        command.serialisedRequest(),
-        command.occurredAt());
+    requireDraft(command.priorAuthorityId(), draftStore);
+    uploadedDocumentStore.delete(command.priorAuthorityId(), command.documentId());
     eventAppender.append(PriorAuthorityDecider.decideDocumentDeleted(command, state.applicationId));
     return command.documentId();
   }
@@ -156,24 +122,12 @@ public class PriorAuthorityAggregate {
   UUID handle(
       PriorAuthorityDocumentTypeUpdateCommand command,
       PriorAuthorityDraftStore draftStore,
+      UploadedDocumentStore uploadedDocumentStore,
       EventAppender eventAppender) {
     PriorAuthorityDocumentType.fromValue(command.documentType());
-    PriorAuthorityDataPayload existingDraft = requireDraft(command.priorAuthorityId(), draftStore);
-    List<PriorAuthorityDocument> updatedDocuments = getUpdatedDocuments(command, existingDraft);
-
-    PriorAuthorityContent updatedContent =
-        existingDraft.content().withUploadedDocuments(List.copyOf(updatedDocuments));
-    PriorAuthorityDataPayload updatedPayload =
-        existingDraft
-            .withContent(updatedContent)
-            .withSerialisedRequest(command.serialisedRequest())
-            .withSubmittedAt(command.occurredAt());
-    draftStore.upsert(
-        command.priorAuthorityId(),
-        existingDraft.applicationId(),
-        updatedPayload,
-        command.serialisedRequest(),
-        command.occurredAt());
+    requireDraft(command.priorAuthorityId(), draftStore);
+    uploadedDocumentStore.updateDocumentType(
+        command.priorAuthorityId(), command.documentId(), command.documentType());
     eventAppender.append(PriorAuthorityDecider.decideDocumentTypeUpdated(command));
     return command.documentId();
   }
@@ -267,23 +221,6 @@ public class PriorAuthorityAggregate {
             command.occurredAt()));
   }
 
-  private static @NonNull List<PriorAuthorityDocument> getUpdatedDocuments(
-      PriorAuthorityDocumentTypeUpdateCommand command, PriorAuthorityDataPayload existingDraft) {
-    List<PriorAuthorityDocument> updatedDocuments = copyUploadedDocuments(existingDraft);
-    int documentIndex =
-        IntStream.range(0, updatedDocuments.size())
-            .filter(index -> updatedDocuments.get(index).documentId().equals(command.documentId()))
-            .findFirst()
-            .orElseThrow(
-                () ->
-                    new ResourceNotFoundException(
-                        "Document %s not found for Prior Authority %s"
-                            .formatted(command.documentId(), command.priorAuthorityId())));
-    PriorAuthorityDocument existingDocument = updatedDocuments.get(documentIndex);
-    updatedDocuments.set(documentIndex, existingDocument.withDocumentType(command.documentType()));
-    return updatedDocuments;
-  }
-
   private void validateWorkItem(UUID workItemId, long expectedAssignmentVersion) {
     if (priorAuthorityId == null || !priorAuthorityId.equals(workItemId)) {
       throw new ResourceNotFoundException(
@@ -309,19 +246,11 @@ public class PriorAuthorityAggregate {
     PriorAuthorityContent updatedContent =
         command
             .content()
-            .withPriorAuthorityType(PriorAuthorityType.valueOf(state.priorAuthorityType))
-            .withUploadedDocuments(existingDraft.content().uploadedDocuments());
+            .withPriorAuthorityType(PriorAuthorityType.valueOf(state.priorAuthorityType));
     return existingDraft
         .withContent(updatedContent)
         .withSerialisedRequest(command.serialisedRequest())
         .withSubmittedAt(command.occurredAt());
-  }
-
-  private static List<PriorAuthorityDocument> copyUploadedDocuments(
-      PriorAuthorityDataPayload draft) {
-    return draft.content().uploadedDocuments() == null
-        ? new ArrayList<>()
-        : new ArrayList<>(draft.content().uploadedDocuments());
   }
 
   @EventSourcingHandler

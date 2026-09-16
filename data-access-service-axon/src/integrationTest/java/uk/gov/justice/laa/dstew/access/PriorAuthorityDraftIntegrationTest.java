@@ -301,6 +301,19 @@ class PriorAuthorityDraftIntegrationTest {
         objectMapper
             .readValue(uploadResponse.getBody(), UploadPriorAuthorityDocumentResponse.class)
             .getDocumentId();
+    assertThat(
+            jdbcTemplate.queryForObject(
+                "SELECT original_filename FROM axon.uploaded_documents WHERE document_id = ?",
+                String.class,
+                documentId))
+        .isEqualTo("evidence.pdf");
+    assertThat(
+            jdbcTemplate.queryForObject(
+                "SELECT payload -> 'content' -> 'uploadedDocuments'"
+                    + " FROM axon.prior_authority_draft WHERE prior_authority_id = ?",
+                String.class,
+                priorAuthorityId))
+        .isNull();
 
     ResponseEntity<Void> updateDocumentTypeResponse =
         restTemplate.exchange(
@@ -312,6 +325,12 @@ class PriorAuthorityDraftIntegrationTest {
                 headers()),
             Void.class);
     assertThat(updateDocumentTypeResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(
+            jdbcTemplate.queryForObject(
+                "SELECT document_type FROM axon.uploaded_documents WHERE document_id = ?",
+                String.class,
+                documentId))
+        .isEqualTo("GATEWAY_EVIDENCE");
 
     ResponseEntity<String> submitResponse =
         restTemplate.postForEntity(

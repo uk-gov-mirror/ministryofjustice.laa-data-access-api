@@ -35,6 +35,7 @@ import uk.gov.justice.laa.dstew.access.command.application.priorauthority.data.P
 import uk.gov.justice.laa.dstew.access.command.application.priorauthority.decision.ApportionmentInformation;
 import uk.gov.justice.laa.dstew.access.command.application.priorauthority.decision.MakePriorAuthorityDecisionCommand;
 import uk.gov.justice.laa.dstew.access.command.application.priorauthority.decision.PriorAuthorityDecisionMadeEvent;
+import uk.gov.justice.laa.dstew.access.command.application.priorauthority.document.UploadedDocumentStore;
 import uk.gov.justice.laa.dstew.access.command.worklist.WorkItemAssigned;
 import uk.gov.justice.laa.dstew.access.command.worklist.WorkItemType;
 import uk.gov.justice.laa.dstew.access.content.priorauthority.PriorAuthorityContent;
@@ -54,6 +55,7 @@ class PriorAuthorityAggregateTest {
   private AxonTestFixture fixture;
   @Mock private PriorAuthorityDataStore dataStore;
   @Mock private PriorAuthorityDraftStore draftStore;
+  @Mock private UploadedDocumentStore uploadedDocumentStore;
   @Mock private ApplicationDataStore applicationDataStore;
   @Mock private JsonSchemaValidator jsonSchemaValidator;
   @Mock private EventAppender eventAppender;
@@ -73,6 +75,8 @@ class PriorAuthorityAggregateTest {
                                 PriorAuthorityDataStore.class, configuration -> dataStore)
                             .registerComponent(
                                 PriorAuthorityDraftStore.class, configuration -> draftStore)
+                            .registerComponent(
+                                UploadedDocumentStore.class, configuration -> uploadedDocumentStore)
                             .registerComponent(
                                 ApplicationDataStore.class, configuration -> applicationDataStore)
                             .registerComponent(
@@ -750,24 +754,16 @@ class PriorAuthorityAggregateTest {
                     "{}",
                     occurredAt)));
 
-    UUID returnedDocumentId = aggregate.handle(command, draftStore, eventAppender);
+    UUID returnedDocumentId =
+        aggregate.handle(command, draftStore, uploadedDocumentStore, eventAppender);
 
     assertThat(returnedDocumentId).isEqualTo(documentId);
-    ArgumentCaptor<PriorAuthorityDataPayload> payloadCaptor =
-        ArgumentCaptor.forClass(PriorAuthorityDataPayload.class);
-    verify(draftStore)
-        .upsert(
-            eq(priorAuthorityId),
-            eq(applicationId),
-            payloadCaptor.capture(),
-            eq(serialisedRequest),
-            eq(occurredAt));
-    assertThat(payloadCaptor.getValue().serialisedRequest()).isEqualTo(serialisedRequest);
-    assertThat(payloadCaptor.getValue().content().uploadedDocuments()).hasSize(1);
-    assertThat(payloadCaptor.getValue().content().uploadedDocuments().getFirst().documentType())
-        .isNull();
-    assertThat(payloadCaptor.getValue().content().uploadedDocuments().getFirst().checksum())
-        .isEqualTo("sum");
+    ArgumentCaptor<PriorAuthorityDocument> documentCaptor =
+        ArgumentCaptor.forClass(PriorAuthorityDocument.class);
+    verify(uploadedDocumentStore).save(eq(priorAuthorityId), documentCaptor.capture());
+    assertThat(documentCaptor.getValue().documentType()).isNull();
+    assertThat(documentCaptor.getValue().checksum()).isEqualTo("sum");
+    verify(draftStore, never()).upsert(any(), any(), any(), any(), any());
     verify(eventAppender).append(any(PriorAuthorityDocumentUploadedEvent.class));
   }
 
@@ -823,18 +819,11 @@ class PriorAuthorityAggregateTest {
             "PDF",
             "application/pdf");
 
-    aggregate.handle(priorAuthorityDocumentUploadCommand, draftStore, eventAppender);
+    aggregate.handle(
+        priorAuthorityDocumentUploadCommand, draftStore, uploadedDocumentStore, eventAppender);
 
-    ArgumentCaptor<PriorAuthorityDataPayload> payloadCaptor =
-        ArgumentCaptor.forClass(PriorAuthorityDataPayload.class);
-    verify(draftStore)
-        .upsert(
-            eq(priorAuthorityId),
-            eq(applicationId),
-            payloadCaptor.capture(),
-            eq("{}"),
-            eq(occurredAt));
-    assertThat(payloadCaptor.getValue().content().uploadedDocuments()).hasSize(2);
+    verify(uploadedDocumentStore).save(eq(priorAuthorityId), any(PriorAuthorityDocument.class));
+    verify(draftStore, never()).upsert(any(), any(), any(), any(), any());
   }
 
   @Test
@@ -867,7 +856,11 @@ class PriorAuthorityAggregateTest {
                       file.getSize(),
                       "PDF",
                       "application/pdf");
-              aggregate.handle(priorAuthorityDocumentUploadCommand, draftStore, eventAppender);
+              aggregate.handle(
+                  priorAuthorityDocumentUploadCommand,
+                  draftStore,
+                  uploadedDocumentStore,
+                  eventAppender);
             });
   }
 
@@ -922,21 +915,12 @@ class PriorAuthorityAggregateTest {
                     "{}",
                     occurredAt)));
 
-    assertThat(aggregate.handle(command, draftStore, eventAppender)).isEqualTo(documentId);
+    assertThat(aggregate.handle(command, draftStore, uploadedDocumentStore, eventAppender))
+        .isEqualTo(documentId);
 
-    ArgumentCaptor<PriorAuthorityDataPayload> payloadCaptor =
-        ArgumentCaptor.forClass(PriorAuthorityDataPayload.class);
-    verify(draftStore)
-        .upsert(
-            eq(priorAuthorityId),
-            eq(applicationId),
-            payloadCaptor.capture(),
-            eq(serialisedRequest),
-            eq(occurredAt));
-    assertThat(payloadCaptor.getValue().content().uploadedDocuments().getFirst().documentType())
-        .isEqualTo("GATEWAY_EVIDENCE");
-    assertThat(payloadCaptor.getValue().content().uploadedDocuments().get(1).documentType())
-        .isNull();
+    verify(uploadedDocumentStore)
+        .updateDocumentType(priorAuthorityId, documentId, "GATEWAY_EVIDENCE");
+    verify(draftStore, never()).upsert(any(), any(), any(), any(), any());
     verify(eventAppender)
         .append(
             new PriorAuthorityDocumentTypeUpdatedEvent(
@@ -993,20 +977,10 @@ class PriorAuthorityAggregateTest {
                     "{}",
                     occurredAt)));
 
-    aggregate.handle(command, draftStore, eventAppender);
+    aggregate.handle(command, draftStore, uploadedDocumentStore, eventAppender);
 
-    ArgumentCaptor<PriorAuthorityDataPayload> payloadCaptor =
-        ArgumentCaptor.forClass(PriorAuthorityDataPayload.class);
-    verify(draftStore)
-        .upsert(
-            eq(priorAuthorityId),
-            eq(applicationId),
-            payloadCaptor.capture(),
-            eq("{}"),
-            eq(occurredAt));
-    assertThat(payloadCaptor.getValue().content().uploadedDocuments())
-        .extracting(PriorAuthorityDocument::documentType)
-        .containsExactly("GATEWAY_EVIDENCE", "EXPERT_REPORT");
+    verify(uploadedDocumentStore)
+        .updateDocumentType(priorAuthorityId, documentId, "GATEWAY_EVIDENCE");
   }
 
   @Test
@@ -1017,7 +991,8 @@ class PriorAuthorityAggregateTest {
             UUID.randomUUID(), UUID.randomUUID(), "INVALID", "{}", Instant.now());
 
     assertThatIllegalArgumentException()
-        .isThrownBy(() -> aggregate.handle(command, draftStore, eventAppender));
+        .isThrownBy(
+            () -> aggregate.handle(command, draftStore, uploadedDocumentStore, eventAppender));
 
     verify(draftStore, never()).find(any());
     verify(eventAppender, never()).append(any(PriorAuthorityDocumentTypeUpdatedEvent.class));
@@ -1059,7 +1034,8 @@ class PriorAuthorityAggregateTest {
             "PDF",
             "application/pdf");
 
-    aggregate.handle(priorAuthorityDocumentUploadCommand, draftStore, eventAppender);
+    aggregate.handle(
+        priorAuthorityDocumentUploadCommand, draftStore, uploadedDocumentStore, eventAppender);
 
     ArgumentCaptor<PriorAuthorityDocumentUploadedEvent> eventCaptor =
         ArgumentCaptor.forClass(PriorAuthorityDocumentUploadedEvent.class);
@@ -1117,20 +1093,11 @@ class PriorAuthorityAggregateTest {
                     "{}",
                     occurredAt)));
 
-    assertThat(aggregate.handle(command, draftStore, eventAppender)).isEqualTo(documentId);
+    assertThat(aggregate.handle(command, draftStore, uploadedDocumentStore, eventAppender))
+        .isEqualTo(documentId);
 
-    ArgumentCaptor<PriorAuthorityDataPayload> payloadCaptor =
-        ArgumentCaptor.forClass(PriorAuthorityDataPayload.class);
-    verify(draftStore)
-        .upsert(
-            eq(priorAuthorityId),
-            eq(applicationId),
-            payloadCaptor.capture(),
-            eq("{}"),
-            eq(occurredAt));
-    assertThat(payloadCaptor.getValue().content().uploadedDocuments())
-        .extracting(PriorAuthorityDocument::documentId)
-        .containsExactly(remainingDocumentId);
+    verify(uploadedDocumentStore).delete(priorAuthorityId, documentId);
+    verify(draftStore, never()).upsert(any(), any(), any(), any(), any());
     verify(eventAppender)
         .append(
             new PriorAuthorityDocumentDeletedEvent(
@@ -1160,8 +1127,16 @@ class PriorAuthorityAggregateTest {
                     "{}",
                     occurredAt)));
 
+    doThrow(
+            new ResourceNotFoundException(
+                "Document %s not found for Prior Authority %s"
+                    .formatted(documentId, priorAuthorityId)))
+        .when(uploadedDocumentStore)
+        .delete(priorAuthorityId, documentId);
+
     org.assertj.core.api.Assertions.assertThatExceptionOfType(ResourceNotFoundException.class)
-        .isThrownBy(() -> aggregate.handle(command, draftStore, eventAppender));
+        .isThrownBy(
+            () -> aggregate.handle(command, draftStore, uploadedDocumentStore, eventAppender));
 
     verify(draftStore, never()).upsert(any(), any(), any(), any(), any());
     verify(eventAppender, never()).append(any(PriorAuthorityDocumentDeletedEvent.class));
