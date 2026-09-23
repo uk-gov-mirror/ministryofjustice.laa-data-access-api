@@ -24,6 +24,7 @@ import uk.gov.justice.laa.dstew.access.testsupport.TestJwtDecoderConfig;
       "spring.jpa.hibernate.ddl-auto=create-drop",
       "spring.jpa.properties.hibernate.default_schema=PUBLIC",
       "spring.datasource.url=jdbc:h2:mem:axon-dev-token;DB_CLOSE_DELAY=-1",
+      "feature.disable-security=false",
       "feature.enable-dev-token=true",
       "ENTRA_ISSUER_URI=" + TestJwtDecoderConfig.ISSUER_URI,
       "ENTRA_AUD=" + TestJwtDecoderConfig.AUDIENCE
