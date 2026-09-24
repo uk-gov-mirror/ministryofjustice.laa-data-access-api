@@ -20,6 +20,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import uk.gov.justice.laa.dstew.access.command.application.priorauthority.DisbursementInformation;
+import uk.gov.justice.laa.dstew.access.command.application.priorauthority.PriorAuthorityDocumentDeletedEvent;
+import uk.gov.justice.laa.dstew.access.command.application.priorauthority.PriorAuthorityDocumentUploadedEvent;
 import uk.gov.justice.laa.dstew.access.command.application.priorauthority.PriorAuthorityDraftStartedEvent;
 import uk.gov.justice.laa.dstew.access.command.application.priorauthority.PriorAuthoritySubmittedEvent;
 import uk.gov.justice.laa.dstew.access.command.application.priorauthority.data.PriorAuthorityDataPayload;
@@ -35,6 +37,7 @@ import uk.gov.justice.laa.dstew.access.content.priorauthority.DisbursementDetail
 import uk.gov.justice.laa.dstew.access.content.priorauthority.ExpertCosts;
 import uk.gov.justice.laa.dstew.access.content.priorauthority.ExpertDetails;
 import uk.gov.justice.laa.dstew.access.content.priorauthority.PriorAuthorityContent;
+import uk.gov.justice.laa.dstew.access.content.priorauthority.PriorAuthorityDocument;
 import uk.gov.justice.laa.dstew.access.content.priorauthority.PriorAuthorityResult;
 import uk.gov.justice.laa.dstew.access.content.priorauthority.PriorAuthorityType;
 import uk.gov.justice.laa.dstew.access.content.priorauthority.TimeRequested;
@@ -100,6 +103,30 @@ class PriorAuthorityProjectionTest {
   }
 
   @Test
+  void givenExistingDraft_whenSubmittedEventHandled_thenUpdatesCurrentStateRow() {
+    UUID priorAuthorityId = UUID.randomUUID();
+    Instant occurredAt = Instant.parse("2026-09-04T10:00:00Z");
+    PriorAuthorityReadModel model =
+        PriorAuthorityReadModel.builder()
+            .priorAuthorityId(priorAuthorityId)
+            .applicationId(UUID.randomUUID())
+            .dataVersion(0L)
+            .status("DRAFT")
+            .build();
+    when(repository.findById(priorAuthorityId)).thenReturn(Optional.of(model));
+
+    projection.on(
+        new PriorAuthoritySubmittedEvent(
+            priorAuthorityId, model.getApplicationId(), "EXPERT", 1, 2L, 0L, occurredAt),
+        queryUpdateEmitter);
+
+    assertThat(model.getDataVersion()).isEqualTo(2L);
+    assertThat(model.getStatus()).isEqualTo("SUBMITTED");
+    assertThat(model.getModifiedAt()).isEqualTo(occurredAt);
+    verify(repository).save(model);
+  }
+
+  @Test
   void givenDraftRowWithDraftStatus_whenQueryHandled_thenHydratesDraftContent() {
     UUID priorAuthorityId = UUID.randomUUID();
     UUID applicationId = UUID.randomUUID();
@@ -126,6 +153,23 @@ class PriorAuthorityProjectionTest {
     assertThat(result.applicationId()).isEqualTo(applicationId);
     assertThat(result.status()).isEqualTo("DRAFT");
     assertThat(result.priorAuthorityType()).isEqualTo(EXPERT);
+  }
+
+  @Test
+  void givenDraftRowWithoutStoredDraft_whenQueryHandled_thenReturnsNull() {
+    UUID priorAuthorityId = UUID.randomUUID();
+    PriorAuthorityReadModel model =
+        PriorAuthorityReadModel.builder()
+            .priorAuthorityId(priorAuthorityId)
+            .applicationId(UUID.randomUUID())
+            .dataVersion(0L)
+            .status("DRAFT")
+            .build();
+    when(repository.findById(priorAuthorityId)).thenReturn(Optional.of(model));
+    when(draftStore.find(priorAuthorityId)).thenReturn(Optional.empty());
+
+    assertThat(projection.handle(new FindPriorAuthorityByPriorAuthorityIdQuery(priorAuthorityId)))
+        .isNull();
   }
 
   @Test
@@ -305,6 +349,144 @@ class PriorAuthorityProjectionTest {
   }
 
   @Test
+  void givenUploadedAndDeletedDocumentEvents_whenHandled_thenUpdatesDocumentIds() {
+    UUID priorAuthorityId = UUID.randomUUID();
+    UUID existingDocumentId = UUID.randomUUID();
+    UUID newDocumentId = UUID.randomUUID();
+    PriorAuthorityReadModel model =
+        PriorAuthorityReadModel.builder()
+            .priorAuthorityId(priorAuthorityId)
+            .applicationId(UUID.randomUUID())
+            .uploadedDocumentIds(java.util.List.of(existingDocumentId))
+            .build();
+    when(repository.findById(priorAuthorityId)).thenReturn(Optional.of(model));
+
+    projection.on(
+        new PriorAuthorityDocumentUploadedEvent(
+            priorAuthorityId,
+            newDocumentId,
+            Instant.now(),
+            1L,
+            "application/pdf",
+            "checksum",
+            UUID.randomUUID()));
+    projection.on(
+        new PriorAuthorityDocumentDeletedEvent(
+            priorAuthorityId, existingDocumentId, Instant.now(), UUID.randomUUID()));
+
+    assertThat(model.getUploadedDocumentIds()).containsExactly(newDocumentId);
+    verify(repository, org.mockito.Mockito.times(2)).save(model);
+  }
+
+  @Test
+  void givenNullDocumentIds_whenDocumentUploaded_thenInitializesDocumentIds() {
+    UUID priorAuthorityId = UUID.randomUUID();
+    UUID documentId = UUID.randomUUID();
+    PriorAuthorityReadModel model =
+        PriorAuthorityReadModel.builder()
+            .priorAuthorityId(priorAuthorityId)
+            .applicationId(UUID.randomUUID())
+            .uploadedDocumentIds(null)
+            .build();
+    when(repository.findById(priorAuthorityId)).thenReturn(Optional.of(model));
+
+    projection.on(
+        new PriorAuthorityDocumentUploadedEvent(
+            priorAuthorityId,
+            documentId,
+            Instant.now(),
+            1L,
+            "application/pdf",
+            "checksum",
+            UUID.randomUUID()));
+
+    assertThat(model.getUploadedDocumentIds()).containsExactly(documentId);
+    verify(repository).save(model);
+  }
+
+  @Test
+  void givenUploadedDocuments_whenQueryHandled_thenReturnsDocumentsInStoredOrder() {
+    UUID priorAuthorityId = UUID.randomUUID();
+    UUID firstDocumentId = UUID.randomUUID();
+    UUID secondDocumentId = UUID.randomUUID();
+    PriorAuthorityReadModel model =
+        PriorAuthorityReadModel.builder()
+            .priorAuthorityId(priorAuthorityId)
+            .applicationId(UUID.randomUUID())
+            .dataVersion(1L)
+            .status("SUBMITTED")
+            .uploadedDocumentIds(java.util.List.of(firstDocumentId, secondDocumentId))
+            .build();
+    PriorAuthorityDocument firstDocument = document(firstDocumentId, "first.pdf");
+    PriorAuthorityDocument secondDocument = document(secondDocumentId, "second.pdf");
+    when(repository.findById(priorAuthorityId)).thenReturn(Optional.of(model));
+    when(dataStore.get(priorAuthorityId, 1L))
+        .thenReturn(
+            new PriorAuthorityDataPayload(
+                priorAuthorityId,
+                model.getApplicationId(),
+                new PriorAuthorityContent(EXPERT, "Required", null, null, null),
+                "{}",
+                Instant.now()));
+    when(uploadedDocumentStore.findAllInOrder(model.getUploadedDocumentIds()))
+        .thenReturn(java.util.List.of(firstDocument, secondDocument));
+
+    PriorAuthorityResult result =
+        projection.handle(new FindPriorAuthorityByPriorAuthorityIdQuery(priorAuthorityId));
+
+    assertThat(result.uploadedDocuments()).containsExactly(firstDocument, secondDocument);
+  }
+
+  @Test
+  void givenEmptyDocumentList_whenQueryHandled_thenReturnsNoDocuments() {
+    UUID priorAuthorityId = UUID.randomUUID();
+    PriorAuthorityReadModel model =
+        PriorAuthorityReadModel.builder()
+            .priorAuthorityId(priorAuthorityId)
+            .applicationId(UUID.randomUUID())
+            .dataVersion(1L)
+            .status("SUBMITTED")
+            .uploadedDocumentIds(java.util.List.of())
+            .build();
+    when(repository.findById(priorAuthorityId)).thenReturn(Optional.of(model));
+    when(dataStore.get(priorAuthorityId, 1L))
+        .thenReturn(
+            new PriorAuthorityDataPayload(
+                priorAuthorityId,
+                model.getApplicationId(),
+                new PriorAuthorityContent(EXPERT, "Required", null, null, null),
+                "{}",
+                Instant.now()));
+
+    PriorAuthorityResult result =
+        projection.handle(new FindPriorAuthorityByPriorAuthorityIdQuery(priorAuthorityId));
+
+    assertThat(result.uploadedDocuments()).isEmpty();
+    verify(uploadedDocumentStore, org.mockito.Mockito.never()).findAllInOrder(any());
+  }
+
+  @Test
+  void givenMissingProjectionRow_whenDocumentEventsHandled_thenDoesNotSave() {
+    UUID priorAuthorityId = UUID.randomUUID();
+    when(repository.findById(priorAuthorityId)).thenReturn(Optional.empty());
+
+    projection.on(
+        new PriorAuthorityDocumentUploadedEvent(
+            priorAuthorityId,
+            UUID.randomUUID(),
+            Instant.now(),
+            1L,
+            "application/pdf",
+            "checksum",
+            UUID.randomUUID()));
+    projection.on(
+        new PriorAuthorityDocumentDeletedEvent(
+            priorAuthorityId, UUID.randomUUID(), Instant.now(), UUID.randomUUID()));
+
+    verify(repository, org.mockito.Mockito.never()).save(any());
+  }
+
+  @Test
   void givenDecisionStoredInPayload_whenQueryHandled_thenReturnsDecisionDetails() {
     UUID priorAuthorityId = UUID.randomUUID();
     UUID applicationId = UUID.randomUUID();
@@ -419,5 +601,18 @@ class PriorAuthorityProjectionTest {
                 priorAuthorityId, model.getApplicationId(), content, "{}", Instant.now()));
 
     return projection.handle(new FindPriorAuthorityByPriorAuthorityIdQuery(priorAuthorityId));
+  }
+
+  private PriorAuthorityDocument document(UUID documentId, String filename) {
+    return new PriorAuthorityDocument(
+        documentId,
+        "EVIDENCE",
+        filename,
+        "pdf",
+        "application/pdf",
+        1L,
+        Instant.parse("2026-09-04T10:00:00Z"),
+        "laa-data-access",
+        "checksum");
   }
 }

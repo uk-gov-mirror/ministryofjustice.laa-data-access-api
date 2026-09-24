@@ -12,6 +12,7 @@ public record UploadedDocumentMetadata(
     String sourceService,
     String checksum) {
 
+  /** Creates metadata from the domain document representation stored in draft content. */
   public static UploadedDocumentMetadata from(PriorAuthorityDocument document) {
     return new UploadedDocumentMetadata(
         document.fileType(),
@@ -22,6 +23,7 @@ public record UploadedDocumentMetadata(
         document.checksum());
   }
 
+  /** Rebuilds the domain document view from stored metadata and relational columns. */
   public PriorAuthorityDocument toDocument(
       java.util.UUID documentId, String originalFilename, String documentType) {
     return new PriorAuthorityDocument(

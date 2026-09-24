@@ -202,6 +202,7 @@ class PostgresAxonIntegrationTest {
             "prior_authority_draft",
             "prior_authority_history",
             "token_entry",
+            "uploaded_documents",
             "work_item_route",
             "work_list_item");
     assertThat(sequences).containsExactly("aggregate-event-global-index-sequence");

@@ -19,6 +19,7 @@ public class UploadedDocumentStore {
     this.repository = repository;
   }
 
+  /** Persists metadata for a newly uploaded prior-authority document. */
   public void save(UUID submissionId, PriorAuthorityDocument document) {
     repository.saveAndFlush(
         UploadedDocument.builder()
@@ -30,6 +31,7 @@ public class UploadedDocumentStore {
             .build());
   }
 
+  /** Replaces the stored document type for the identified prior-authority document. */
   public void updateDocumentType(UUID submissionId, UUID documentId, String documentType) {
     UploadedDocument document =
         repository
@@ -47,6 +49,7 @@ public class UploadedDocumentStore {
             .toDocument(documentId, document.getOriginalFilename(), documentType));
   }
 
+  /** Deletes the stored metadata row for the identified prior-authority document. */
   public void delete(UUID submissionId, UUID documentId) {
     UploadedDocument document =
         repository
@@ -60,6 +63,7 @@ public class UploadedDocumentStore {
     repository.delete(document);
   }
 
+  /** Returns stored documents in the same order as the requested document identifiers. */
   public List<PriorAuthorityDocument> findAllInOrder(Collection<UUID> documentIds) {
     Map<UUID, UploadedDocument> documentsById =
         repository.findAllById(documentIds).stream()

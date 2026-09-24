@@ -31,9 +31,8 @@ FROM (
     SELECT prior_authority_id, payload
     FROM prior_authority_draft
     UNION ALL
-    SELECT DISTINCT ON (prior_authority_id) prior_authority_id, payload
+    SELECT prior_authority_id, payload
     FROM prior_authority_data
-    ORDER BY prior_authority_id, data_version DESC
 ) source
 CROSS JOIN LATERAL jsonb_array_elements(COALESCE(source.payload->'content'->'uploadedDocuments', '[]'::jsonb)) document
 ON CONFLICT (document_id) DO NOTHING;

@@ -101,20 +101,32 @@ public class PriorAuthorityProjection {
         event.applicationId(),
         0L,
         PriorAuthorityStatus.DRAFT.name(),
-        event.occurredAt(),
-        queryUpdateEmitter);
+        event.occurredAt());
   }
 
-  /** Creates the current-state row once a prior-authority draft has been submitted. */
+  /** Transitions the existing draft current-state row to submitted. */
   @EventHandler
   public void on(PriorAuthoritySubmittedEvent event, QueryUpdateEmitter queryUpdateEmitter) {
-    createRow(
-        event.priorAuthorityId(),
-        event.applicationId(),
-        event.dataVersion(),
-        PriorAuthorityStatus.SUBMITTED.name(),
-        event.occurredAt(),
-        queryUpdateEmitter);
+    repository
+        .findById(event.priorAuthorityId())
+        .ifPresentOrElse(
+            current -> {
+              current.setDataVersion(event.dataVersion());
+              current.setStatus(PriorAuthorityStatus.SUBMITTED.name());
+              current.setModifiedAt(event.occurredAt());
+              repository.save(current);
+            },
+            () ->
+                createRow(
+                    event.priorAuthorityId(),
+                    event.applicationId(),
+                    event.dataVersion(),
+                    PriorAuthorityStatus.SUBMITTED.name(),
+                    event.occurredAt()));
+    queryUpdateEmitter.emit(
+        PriorAuthorityPendingByPriorAuthorityIdQuery.class,
+        query -> query.priorAuthorityId().equals(event.priorAuthorityId()),
+        Boolean.TRUE);
   }
 
   /** Updates current-state data version after a terminal prior-authority decision. */
@@ -174,8 +186,7 @@ public class PriorAuthorityProjection {
       UUID applicationId,
       long dataVersion,
       String status,
-      Instant occurredAt,
-      QueryUpdateEmitter queryUpdateEmitter) {
+      Instant occurredAt) {
     repository.save(
         PriorAuthorityReadModel.builder()
             .priorAuthorityId(priorAuthorityId)
@@ -186,12 +197,6 @@ public class PriorAuthorityProjection {
             .modifiedAt(occurredAt)
             .uploadedDocumentIds(List.of())
             .build());
-    if (PriorAuthorityStatus.SUBMITTED.name().equals(status)) {
-      queryUpdateEmitter.emit(
-          PriorAuthorityPendingByPriorAuthorityIdQuery.class,
-          query -> query.priorAuthorityId().equals(priorAuthorityId),
-          Boolean.TRUE);
-    }
   }
 
   /** Clears the disposable current-state table before replay. */
