@@ -13,6 +13,10 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 /** Retrieves effective identity and entitlement claims for the current request. */
 public final class SecurityHelper {
 
+  public static final String ACCESS_AS_PROVIDER = "access_as_provider";
+  public static final String ACCESS_AS_USER = "access_as_user";
+  public static final String DECIDE_AUTO_GRANT_ROLE = "LAA_DECIDE_AUTO_GRANT";
+
   private static final String LAA_ACCOUNTS_CLAIM = "LAA_ACCOUNTS";
   private static final String LAA_APP_ROLES_CLAIM = "LAA_APP_ROLES";
   private static final String ENTRA_OID_CLAIM = "oid";
@@ -46,6 +50,16 @@ public final class SecurityHelper {
             .map(jwt -> jwt.getClaimAsStringList(LAA_APP_ROLES_CLAIM))
             .orElse(null);
     return appRoles == null ? List.of() : List.copyOf(appRoles);
+  }
+
+  /** Gets the Entra application permissions, separately from secondary user entitlements. */
+  public static List<String> getEntraAppRoles() {
+    List<String> roles =
+        getJwtAuthentication()
+            .map(JwtAuthenticationToken::getToken)
+            .map(jwt -> jwt.getClaimAsStringList("roles"))
+            .orElse(null);
+    return roles == null ? List.of() : List.copyOf(roles);
   }
 
   /**

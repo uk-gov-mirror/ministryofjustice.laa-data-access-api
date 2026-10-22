@@ -125,18 +125,6 @@ class ApplicationQueryUseCaseSecurityTest extends BaseSecuredUseCaseTest {
   }
 
   @Test
-  void givenNoRole_whenGettingApplicationDetail_thenDeniesAccess() {
-    setSecurityContext(NO_ROLE);
-    UUID applicationId = UUID.randomUUID();
-
-    assertThatExceptionOfType(AuthorizationDeniedException.class)
-        .isThrownBy(() -> useCase.getApplicationDetail(applicationId))
-        .withMessageContaining("Access Denied");
-
-    verifyNoInteractions(queryGateway);
-  }
-
-  @Test
   void givenMissingApplication_whenGettingApplicationDetail_thenThrowsNotFound() {
     setSecurityContext(CASEWORKER_ROLE);
     UUID applicationId = UUID.randomUUID();

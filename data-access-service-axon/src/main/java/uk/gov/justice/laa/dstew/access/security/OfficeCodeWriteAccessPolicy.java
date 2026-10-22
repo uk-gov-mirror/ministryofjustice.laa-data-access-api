@@ -1,7 +1,7 @@
 package uk.gov.justice.laa.dstew.access.security;
 
-import static uk.gov.justice.laa.dstew.access.security.ApplicationReadScopeAuthorizationManager.ACCESS_AS_PROVIDER;
-import static uk.gov.justice.laa.dstew.access.security.ApplicationReadScopeAuthorizationManager.ACCESS_AS_USER;
+import static uk.gov.justice.laa.dstew.access.security.SecurityHelper.ACCESS_AS_PROVIDER;
+import static uk.gov.justice.laa.dstew.access.security.SecurityHelper.ACCESS_AS_USER;
 
 import java.util.Objects;
 import java.util.Set;

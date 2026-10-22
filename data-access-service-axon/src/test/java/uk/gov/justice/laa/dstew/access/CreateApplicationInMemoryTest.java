@@ -16,6 +16,9 @@ import org.axonframework.common.configuration.AxonConfiguration;
 import org.axonframework.messaging.eventhandling.processing.streaming.StreamingEventProcessor;
 import org.axonframework.messaging.queryhandling.gateway.QueryGateway;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
@@ -64,7 +67,9 @@ import uk.gov.justice.laa.dstew.access.testsupport.TestJwtDecoderConfig;
       "spring.jpa.hibernate.ddl-auto=create-drop",
       "spring.jpa.properties.hibernate.default_schema=PUBLIC",
       "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect",
-      "spring.datasource.url=jdbc:h2:mem:axon-create;DB_CLOSE_DELAY=-1"
+      "spring.datasource.url=jdbc:h2:mem:axon-create;DB_CLOSE_DELAY=-1",
+      "feature.disable-security=false",
+      "feature.enable-dev-token=false"
     })
 @AutoConfigureTestRestTemplate
 @Import(TestJwtDecoderConfig.class)
@@ -81,6 +86,147 @@ class CreateApplicationInMemoryTest {
   @Autowired private JdbcTemplate jdbcTemplate;
   @Autowired private QueryGateway queryGateway;
   @Autowired private ApplicationDataRepository applicationDataRepository;
+
+  @ParameterizedTest
+  @CsvSource({
+    "test-auto-grant-service-token, MANUAL",
+    "test-auto-grant-service-token, AUTOGRANTED",
+    "test-obo-without-role-token, MANUAL"
+  })
+  void givenAutoGrantOrOboCaller_whenReadingAndRecordingOutcome_thenSucceeds(
+      String token, String outcome) {
+    UUID applicationId = UUID.randomUUID();
+    applicationId(
+        restTemplate.postForEntity(
+            "/api/v0/applications",
+            new HttpEntity<>(
+                validCreateApplicationRequest(applicationId, UUID.randomUUID()), headers()),
+            Void.class));
+    awaitProjection(applicationId);
+    HttpHeaders serviceHeaders = headers(token);
+
+    ResponseEntity<ApplicationResponse> read =
+        restTemplate.exchange(
+            "/api/v0/applications/" + applicationId,
+            HttpMethod.GET,
+            new HttpEntity<>(serviceHeaders),
+            ApplicationResponse.class);
+    assertThat(read.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(read.getBody()).isNotNull();
+    assertThat(read.getBody().getApplicationId()).isEqualTo(applicationId);
+
+    Map<String, Object> request =
+        "MANUAL".equals(outcome)
+            ? Map.of("outcome", outcome)
+            : Map.of("outcome", outcome, "certificate", Map.of("certificateNumber", "M2M-1"));
+    ResponseEntity<String> write =
+        restTemplate.exchange(
+            "/api/v0/applications/" + applicationId + "/auto-grant-outcome",
+            HttpMethod.PATCH,
+            new HttpEntity<>(request, serviceHeaders),
+            String.class);
+
+    assertThat(write.getStatusCode())
+        .as("response: %s", write.getBody())
+        .isEqualTo(HttpStatus.NO_CONTENT);
+    assertThat(awaitApplicationVersion(applicationId, 1L).getAutoGranted())
+        .isEqualTo(AutoGrantedState.valueOf(outcome));
+  }
+
+  @Test
+  void givenAppOnlyAutoGrantRole_whenCallingOtherEndpoints_thenReturnsForbidden() {
+    String applicationPath = "/api/v0/applications/" + UUID.randomUUID();
+    HttpHeaders serviceHeaders = headers(TestJwtDecoderConfig.AUTO_GRANT_BEARER_TOKEN);
+    for (String path :
+        List.of(
+            "/api/v0/applications",
+            applicationPath + "/certificate",
+            applicationPath + "/history-search",
+            applicationPath + "/notes",
+            applicationPath + "/documents/" + UUID.randomUUID(),
+            "/api/v0/work-list",
+            "/api/v0/individuals")) {
+      assertThat(
+              restTemplate
+                  .exchange(path, HttpMethod.GET, new HttpEntity<>(serviceHeaders), String.class)
+                  .getStatusCode())
+          .as("GET %s", path)
+          .isEqualTo(HttpStatus.FORBIDDEN);
+    }
+    for (String path : List.of(applicationPath, applicationPath + "/decision")) {
+      assertThat(
+              restTemplate
+                  .exchange(
+                      path,
+                      HttpMethod.PATCH,
+                      new HttpEntity<>(Map.of(), serviceHeaders),
+                      String.class)
+                  .getStatusCode())
+          .as("PATCH %s", path)
+          .isEqualTo(HttpStatus.FORBIDDEN);
+    }
+    assertThat(
+            restTemplate
+                .postForEntity(
+                    "/api/v0/applications",
+                    new HttpEntity<>(
+                        validCreateApplicationRequest(UUID.randomUUID(), UUID.randomUUID()),
+                        serviceHeaders),
+                    String.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.FORBIDDEN);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"test-other-service-token", "invalid-token", ""})
+  void givenMissingAutoGrantPermission_whenReadingOrRecordingOutcome_thenDeniesAccess(
+      String token) {
+    String path = "/api/v0/applications/" + UUID.randomUUID();
+    HttpHeaders requestHeaders = headers(token);
+    if (token.isEmpty()) {
+      requestHeaders.remove(HttpHeaders.AUTHORIZATION);
+    }
+    HttpStatus expected =
+        TestJwtDecoderConfig.OTHER_SERVICE_BEARER_TOKEN.equals(token)
+            ? HttpStatus.FORBIDDEN
+            : HttpStatus.UNAUTHORIZED;
+
+    assertThat(
+            restTemplate
+                .exchange(path, HttpMethod.GET, new HttpEntity<>(requestHeaders), String.class)
+                .getStatusCode())
+        .isEqualTo(expected);
+    assertThat(
+            restTemplate
+                .exchange(
+                    path + "/auto-grant-outcome",
+                    HttpMethod.PATCH,
+                    new HttpEntity<>(
+                        new ManualOutcomeRequest(AutoGrantOutcome.MANUAL), requestHeaders),
+                    String.class)
+                .getStatusCode())
+        .isEqualTo(expected);
+  }
+
+  @Test
+  void givenCaseworkerWithoutDelegatedScope_whenReadingApplications_thenReturnsForbidden() {
+    for (String path :
+        List.of(
+            "/api/v0/applications",
+            "/api/v0/applications/" + UUID.randomUUID(),
+            "/api/v0/applications/" + UUID.randomUUID() + "/documents/" + UUID.randomUUID())) {
+      assertThat(
+              restTemplate
+                  .exchange(
+                      path,
+                      HttpMethod.GET,
+                      new HttpEntity<>(headers(TestJwtDecoderConfig.UNSCOPED_BEARER_TOKEN)),
+                      String.class)
+                  .getStatusCode())
+          .as("GET %s", path)
+          .isEqualTo(HttpStatus.FORBIDDEN);
+    }
+  }
 
   @Test
   void givenApplicationInProgress_whenUpdatedToSubmitted_thenCurrentStateAdvancesVersion() {
@@ -801,10 +947,14 @@ class CreateApplicationInMemoryTest {
   }
 
   private HttpHeaders headers() {
+    return headers(TestJwtDecoderConfig.BEARER_TOKEN);
+  }
+
+  private HttpHeaders headers(String token) {
     HttpHeaders headers = new HttpHeaders();
     headers.set("X-Service-Name", "CIVIL_APPLY");
     headers.set("X-Schema-Version", "1");
-    headers.setBearerAuth(TestJwtDecoderConfig.BEARER_TOKEN);
+    headers.setBearerAuth(token);
     return headers;
   }
 

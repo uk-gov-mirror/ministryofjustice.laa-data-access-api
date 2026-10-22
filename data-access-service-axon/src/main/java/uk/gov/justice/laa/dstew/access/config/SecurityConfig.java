@@ -18,7 +18,6 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.core.env.Environment;
-import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationManagerResolver;
 import org.springframework.security.authorization.AuthorizationDecision;
@@ -44,13 +43,12 @@ import org.springframework.security.oauth2.server.resource.authentication.Bearer
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationProvider;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
-import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 import tools.jackson.databind.ObjectMapper;
 import uk.gov.justice.laa.dstew.access.ExcludeFromGeneratedCodeCoverage;
-import uk.gov.justice.laa.dstew.access.security.ApplicationReadScopeAuthorizationManager;
 import uk.gov.justice.laa.dstew.access.shared.security.EffectiveAuthorizationProvider;
 import uk.gov.laa.springboot.oauth2.EndpointAccessManager;
 import uk.gov.laa.springboot.oauth2.Oauth2AccessDeniedHandler;
@@ -103,8 +101,7 @@ public class SecurityConfig {
       ObjectProvider<AuthenticationManagerResolver<HttpServletRequest>>
           authenticationManagerResolver,
       @Qualifier("jacksonJsonMapper") ObjectMapper objectMapper,
-      @Qualifier("xAuthorizationFilter") OncePerRequestFilter authorizationFilter,
-      ApplicationReadScopeAuthorizationManager applicationReadScopeAuthorizationManager)
+      @Qualifier("xAuthorizationFilter") OncePerRequestFilter authorizationFilter)
       throws Exception {
 
     httpSecurity
@@ -118,9 +115,6 @@ public class SecurityConfig {
         .authorizeHttpRequests(
             auth -> {
               auth.requestMatchers(endpointAccessManager.getUnprotectedUris()).permitAll();
-              auth.requestMatchers(
-                      HttpMethod.GET, "/api/v0/applications", "/api/v0/applications/**")
-                  .access(applicationReadScopeAuthorizationManager);
               auth.anyRequest()
                   .access(
                       (authentication, context) ->
@@ -196,7 +190,9 @@ public class SecurityConfig {
    */
   @Bean
   AuthenticationManagerResolver<HttpServletRequest> authenticationManagerResolver(
-      ObjectProvider<JwtDecoder> jwtDecoderProvider, Environment environment) {
+      ObjectProvider<JwtDecoder> jwtDecoderProvider,
+      Environment environment,
+      JwtAuthenticationConverter jwtConverter) {
     JwtDecoder resolvedJwtDecoder = jwtDecoderProvider.getIfAvailable();
     if (resolvedJwtDecoder == null) {
       resolvedJwtDecoder =
@@ -208,8 +204,10 @@ public class SecurityConfig {
               environment.getRequiredProperty(
                   "spring.security.oauth2.resourceserver.jwt.audience"));
     }
-    AuthenticationManager jwtAuthenticationManager = jwtAuthenticationManager(resolvedJwtDecoder);
-    AuthenticationManager devTokenAuthenticationManager = this::authenticateDevToken;
+    AuthenticationManager jwtAuthenticationManager =
+        jwtAuthenticationManager(resolvedJwtDecoder, jwtConverter);
+    AuthenticationManager devTokenAuthenticationManager =
+        authentication -> authenticateDevToken(authentication, jwtConverter);
 
     return request ->
         isDevTokenRequest(request) ? devTokenAuthenticationManager : jwtAuthenticationManager;
@@ -225,38 +223,26 @@ public class SecurityConfig {
     return new SecurityContextEffectiveAuthorizationProvider();
   }
 
-  @Bean
-  public ApplicationReadScopeAuthorizationManager applicationReadScopeAuthorizationManager() {
-    return new ApplicationReadScopeAuthorizationManager();
-  }
-
-  private AuthenticationManager jwtAuthenticationManager(JwtDecoder jwtDecoder) {
+  private AuthenticationManager jwtAuthenticationManager(
+      JwtDecoder jwtDecoder, JwtAuthenticationConverter jwtConverter) {
     JwtAuthenticationProvider authenticationProvider = new JwtAuthenticationProvider(jwtDecoder);
-    authenticationProvider.setJwtAuthenticationConverter(jwtAuthenticationConverter());
+    authenticationProvider.setJwtAuthenticationConverter(
+        jwt -> {
+          var authentication = jwtConverter.convert(jwt);
+          if (!StringUtils.hasText(jwt.getClaimAsString("scp"))) {
+            return authentication;
+          }
+          // Existing delegated use cases still use the legacy caseworker method checks.
+          Set<GrantedAuthority> authorities = new HashSet<>(authentication.getAuthorities());
+          authorities.add(new SimpleGrantedAuthority("APPROLE_LAA_CASEWORKER"));
+          authorities.add(new SimpleGrantedAuthority("ROLE_LAA_CASEWORKER"));
+          return new JwtAuthenticationToken(jwt, authorities, authentication.getName());
+        });
     return authenticationProvider::authenticate;
   }
 
-  private JwtAuthenticationConverter jwtAuthenticationConverter() {
-    JwtGrantedAuthoritiesConverter grantedAuthoritiesConverter =
-        new JwtGrantedAuthoritiesConverter();
-    grantedAuthoritiesConverter.setAuthorityPrefix("ROLE_");
-    grantedAuthoritiesConverter.setAuthoritiesClaimName("roles");
-
-    JwtAuthenticationConverter jwtAuthenticationConverter = new JwtAuthenticationConverter();
-    jwtAuthenticationConverter.setJwtGrantedAuthoritiesConverter(
-        jwt -> {
-          Set<GrantedAuthority> authorities =
-              grantedAuthoritiesConverter.convert(jwt) == null
-                  ? new HashSet<>()
-                  : new HashSet<>(grantedAuthoritiesConverter.convert(jwt));
-          authorities.add(new SimpleGrantedAuthority("APPROLE_LAA_CASEWORKER"));
-          authorities.add(new SimpleGrantedAuthority("ROLE_LAA_CASEWORKER"));
-          return authorities;
-        });
-    return jwtAuthenticationConverter;
-  }
-
-  private Authentication authenticateDevToken(Authentication authentication) {
+  private Authentication authenticateDevToken(
+      Authentication authentication, JwtAuthenticationConverter jwtConverter) {
     if (!(authentication instanceof BearerTokenAuthenticationToken bearerTokenAuthentication)) {
       return authentication;
     }
@@ -277,8 +263,9 @@ public class SecurityConfig {
             .issuedAt(issuedAt)
             .expiresAt(issuedAt.plusSeconds(300))
             .build();
-    return new JwtAuthenticationToken(
-        jwt, devToken.authorities().stream().map(SimpleGrantedAuthority::new).toList());
+    Set<GrantedAuthority> authorities = new HashSet<>(jwtConverter.convert(jwt).getAuthorities());
+    devToken.authorities().stream().map(SimpleGrantedAuthority::new).forEach(authorities::add);
+    return new JwtAuthenticationToken(jwt, authorities);
   }
 
   private boolean isDevTokenRequest(HttpServletRequest request) {
@@ -303,13 +290,13 @@ public class SecurityConfig {
       implements EffectiveAuthorizationProvider {
     @Override
     public boolean hasAppRole(String name) {
-      return getAuthorities().contains(AUTHORITY_PREFIX + name);
+      Set<String> authorities = getAuthorities();
+      return authorities.contains(AUTHORITY_PREFIX + name) || authorities.contains("ROLE_" + name);
     }
 
     @Override
     public boolean hasAnyAppRole(String... names) {
-      final var authorities = getAuthorities();
-      return Arrays.stream(names).anyMatch(name -> authorities.contains(AUTHORITY_PREFIX + name));
+      return Arrays.stream(names).anyMatch(this::hasAppRole);
     }
 
     @Override

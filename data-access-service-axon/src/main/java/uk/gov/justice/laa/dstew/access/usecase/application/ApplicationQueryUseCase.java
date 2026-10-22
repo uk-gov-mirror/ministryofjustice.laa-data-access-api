@@ -69,8 +69,9 @@ public class ApplicationQueryUseCase {
     return application;
   }
 
-  /** Returns the requested application and its related detail, or throws when absent. */
-  @AllowApiCaseworker
+  /**
+   * Returns application detail using record visibility after starter-managed HTTP authorization.
+   */
   public ApplicationDetailResult getApplicationDetail(UUID id) {
     ApplicationDetailResult detail =
         queryGateway

@@ -3,6 +3,7 @@ package uk.gov.justice.laa.dstew.access;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.restclient.RestTemplateBuilder;
@@ -85,6 +86,61 @@ class SecondaryAuthorizationIntegrationTest {
   @Autowired private TestRestTemplate restTemplate;
 
   @Autowired private RestTemplateBuilder restTemplateBuilder;
+
+  @Test
+  void givenSignedAutoGrantTokenWithoutScopes_whenCallingMappedOperations_thenReachesApplication() {
+    HttpHeaders headers = new HttpHeaders();
+    headers.set("X-Service-Name", "CIVIL_APPLY");
+    headers.setBearerAuth(clientCredentialsToken("auto-grant-client"));
+    String path = "http://localhost:" + port + "/api/v0/applications/" + UUID.randomUUID();
+
+    var read = restTemplate.exchange(path, HttpMethod.GET, new HttpEntity<>(headers), String.class);
+    assertThat(read.getStatusCode())
+        .as("response: %s", read.getBody())
+        .isEqualTo(HttpStatus.NOT_FOUND);
+
+    var write =
+        restTemplate.exchange(
+            path + "/auto-grant-outcome",
+            HttpMethod.PATCH,
+            new HttpEntity<>(Map.of("outcome", "MANUAL"), headers),
+            String.class);
+    assertThat(write.getStatusCode())
+        .as("response: %s", write.getBody())
+        .isEqualTo(HttpStatus.NOT_FOUND);
+
+    var unrelated =
+        restTemplate.exchange(
+            "http://localhost:" + port + "/api/v0/work-list",
+            HttpMethod.GET,
+            new HttpEntity<>(headers),
+            String.class);
+    assertThat(unrelated.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+  }
+
+  @Test
+  void
+      givenSignedServiceTokenWithoutAutoGrantRole_whenCallingMappedOperations_thenReturnsForbidden() {
+    HttpHeaders headers = new HttpHeaders();
+    headers.set("X-Service-Name", "CIVIL_APPLY");
+    headers.setBearerAuth(clientCredentialsToken("other-service-client"));
+    String path = "http://localhost:" + port + "/api/v0/applications/" + UUID.randomUUID();
+
+    assertThat(
+            restTemplate
+                .exchange(path, HttpMethod.GET, new HttpEntity<>(headers), String.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.FORBIDDEN);
+    assertThat(
+            restTemplate
+                .exchange(
+                    path + "/auto-grant-outcome",
+                    HttpMethod.PATCH,
+                    new HttpEntity<>(Map.of("outcome", "MANUAL"), headers),
+                    String.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.FORBIDDEN);
+  }
 
   @Test
   void givenRoleFreePrimaryToken_whenCallingSecondaryAuthorizationEndpoint_thenReturnsForbidden() {

@@ -72,13 +72,63 @@ laa:
   springboot:
     starter:
       oauth2:
+        scopes-claim-path: scp
         resourceserver:
           jwt:
             tenants:
               - issuer-uri: ${ENTRA_ISSUER_URI}
                 audiences:
                   - ${ENTRA_AUD}
-        authorized-roles: '[{"name": "LAA_CASEWORKER", "uris": ["/api/**"]}]'
+        authorized-roles: '[
+          {
+            "name": "LAA_CASEWORKER", 
+            "uris": [
+              {
+                "method": ["POST", "PUT", "PATCH", "DELETE"],
+                "uri": "/api/**"
+              },
+              {
+                "method": ["GET"],
+                "uri": "/api/v*/work-list"
+              },
+              {
+                "method": ["GET"],
+                "uri": "/api/v*/individuals"
+              },
+              {
+                "method": ["GET"],
+                "uri": "/api/v*/prior-authorities/**"
+              },
+              {
+                "method": ["GET"],
+                "uri": "/api/v*/sds/health"
+              }
+            ]
+          },
+          {
+            "name": "LAA_DECIDE_AUTO_GRANT", 
+             "uris": [
+              {
+                "method": ["GET"],
+                "uri": "/api/v*/applications/*"
+              },
+              {
+                "method": ["PATCH"],
+                "uri": "/api/v*/applications/*/auto-grant-outcome"
+              }
+            ]
+          }
+        ]'
+        authorized-scopes: '[
+          {
+            "name": "access_as_user",
+            "uris": ["/api/**"]
+          },
+          {
+            "name": "access_as_provider",
+            "uris": ["/api/**"]
+          }
+        ]'
         unprotected-uris:
           - /error
           - /actuator/health

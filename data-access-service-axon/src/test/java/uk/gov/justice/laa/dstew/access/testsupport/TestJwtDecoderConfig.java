@@ -27,6 +27,11 @@ public class TestJwtDecoderConfig {
   public static final String OFFICE_C_BEARER_TOKEN = "office-c-caseworker-token";
   public static final String NO_ACCOUNTS_BEARER_TOKEN = "no-accounts-caseworker-token";
   public static final String UNSCOPED_BEARER_TOKEN = "unscoped-caseworker-token";
+  public static final String AUTO_GRANT_BEARER_TOKEN = "test-auto-grant-service-token";
+  public static final String OTHER_SERVICE_BEARER_TOKEN = "test-other-service-token";
+  public static final String DELEGATED_WITHOUT_ROLE_BEARER_TOKEN = "test-obo-without-role-token";
+  public static final UUID AUTO_GRANT_SERVICE_ID =
+      UUID.fromString("33333333-3333-3333-3333-333333333333");
   public static final String ACCESS_AS_USER = "access_as_user";
   public static final String ACCESS_AS_PROVIDER = "access_as_provider";
   public static final List<String> TEST_LAA_ACCOUNTS = List.of("1A001B", "2B002C");
@@ -40,6 +45,22 @@ public class TestJwtDecoderConfig {
   @Primary
   JwtDecoder jwtDecoder() {
     return StubJwtDecoder.of(
+        serviceToken(AUTO_GRANT_BEARER_TOKEN, "LAA_DECIDE_AUTO_GRANT"),
+        serviceToken(OTHER_SERVICE_BEARER_TOKEN, "OTHER_SERVICE"),
+        new StubJwtToken(
+            DELEGATED_WITHOUT_ROLE_BEARER_TOKEN,
+            "delegated-user@example.com",
+            null,
+            null,
+            Map.of(
+                "iss",
+                ISSUER_URI,
+                "aud",
+                List.of(AUDIENCE),
+                "oid",
+                CASEWORKER_ID.toString(),
+                "scp",
+                ACCESS_AS_USER)),
         userToken(BEARER_TOKEN, "caseworker@example.com", CASEWORKER_ID),
         userToken(OTHER_BEARER_TOKEN, "other-caseworker@example.com", OTHER_CASEWORKER_ID),
         token(
@@ -52,6 +73,27 @@ public class TestJwtDecoderConfig {
         providerToken(OFFICE_A_AND_B_BEARER_TOKEN, TEST_LAA_ACCOUNTS),
         providerToken(OFFICE_C_BEARER_TOKEN, List.of("3C003D")),
         providerToken(NO_ACCOUNTS_BEARER_TOKEN, List.of()));
+  }
+
+  private static StubJwtToken serviceToken(String token, String role) {
+    return new StubJwtToken(
+        token,
+        "auto-grant-service",
+        new String[] {role},
+        null,
+        Map.of(
+            "iss",
+            ISSUER_URI,
+            "aud",
+            List.of(AUDIENCE),
+            "roles",
+            List.of(role),
+            "idtyp",
+            "app",
+            "azp",
+            "44444444-4444-4444-4444-444444444444",
+            "oid",
+            AUTO_GRANT_SERVICE_ID.toString()));
   }
 
   private static StubJwtToken userToken(String token, String subject, UUID oid) {

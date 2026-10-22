@@ -11,7 +11,30 @@
           "claims": {
             "sub": "integration-test-user",
             "aud": ["laa-data-access-api"],
+            "scp": "access_as_user",
             "oid": "00000000-0000-0000-0000-000000000001"
+          }
+        },
+        {
+          "requestParam": "client_id",
+          "match": "auto-grant-client",
+          "claims": {
+            "sub": "auto-grant-service",
+            "aud": ["laa-data-access-api"],
+            "oid": "00000000-0000-0000-0000-000000000003",
+            "idtyp": "app",
+            "roles": ["LAA_DECIDE_AUTO_GRANT"]
+          }
+        },
+        {
+          "requestParam": "client_id",
+          "match": "other-service-client",
+          "claims": {
+            "sub": "other-service",
+            "aud": ["laa-data-access-api"],
+            "oid": "00000000-0000-0000-0000-000000000004",
+            "idtyp": "app",
+            "roles": ["OTHER_SERVICE"]
           }
         },
         {
@@ -28,4 +51,3 @@
     }
   ]
 }
-
