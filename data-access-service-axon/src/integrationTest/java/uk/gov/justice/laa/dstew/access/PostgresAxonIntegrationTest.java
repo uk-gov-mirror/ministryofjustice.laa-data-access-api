@@ -67,7 +67,6 @@ import uk.gov.justice.laa.dstew.access.model.AutoGrantOutcome;
 import uk.gov.justice.laa.dstew.access.model.AutoGranted;
 import uk.gov.justice.laa.dstew.access.model.AutoGrantedOutcomeRequest;
 import uk.gov.justice.laa.dstew.access.model.BillingType;
-import uk.gov.justice.laa.dstew.access.model.CaseworkerUnassignRequest;
 import uk.gov.justice.laa.dstew.access.model.CreateNoteRequest;
 import uk.gov.justice.laa.dstew.access.model.CreatePriorAuthorityDraftRequest;
 import uk.gov.justice.laa.dstew.access.model.DecisionStatus;
@@ -1467,10 +1466,6 @@ class PostgresAxonIntegrationTest {
         HttpMethod.POST,
         "/api/v0/applications/" + applicationId + "/notes",
         new CreateNoteRequest("note"));
-    assertUnauthorized(
-        HttpMethod.POST,
-        "/api/v0/applications/" + applicationId + "/unassign",
-        unassignRequestBody());
   }
 
   @Test
@@ -1499,10 +1494,6 @@ class PostgresAxonIntegrationTest {
         HttpMethod.POST,
         "/api/v0/applications/" + applicationId + "/notes",
         new CreateNoteRequest("note"));
-    assertForbidden(
-        HttpMethod.POST,
-        "/api/v0/applications/" + applicationId + "/unassign",
-        unassignRequestBody());
   }
 
   private ApplicationUpdateRequest submittedUpdateBody() {
@@ -1533,11 +1524,6 @@ class PostgresAxonIntegrationTest {
 
   private ManualOutcomeRequest autoGrantOutcomeBody() {
     return new ManualOutcomeRequest(AutoGrantOutcome.MANUAL);
-  }
-
-  private CaseworkerUnassignRequest unassignRequestBody() {
-    return new CaseworkerUnassignRequest()
-        .eventHistory(EventHistoryRequest.builder().eventDescription("unassign").build());
   }
 
   private void assertUnauthorized(HttpMethod method, String path, Object body) {

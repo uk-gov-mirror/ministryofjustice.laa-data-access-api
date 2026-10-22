@@ -10,7 +10,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import uk.gov.justice.laa.dstew.access.model.ApplicationCreateRequest;
 import uk.gov.justice.laa.dstew.access.model.AutoGrantOutcome;
 import uk.gov.justice.laa.dstew.access.model.AutoGrantedOutcomeRequest;
-import uk.gov.justice.laa.dstew.access.model.CaseworkerUnassignRequest;
 import uk.gov.justice.laa.dstew.access.model.DecisionStatus;
 import uk.gov.justice.laa.dstew.access.model.MakeDecisionProceedingRequest;
 import uk.gov.justice.laa.dstew.access.model.MakeDecisionRequest;
@@ -66,10 +65,6 @@ public class GeneratedRequestFactory {
     return new AutoGrantedOutcomeRequest()
         .outcome(AutoGrantOutcome.AUTOGRANTED)
         .certificate(Map.of("source", "mass-data"));
-  }
-
-  public CaseworkerUnassignRequest unassignment() {
-    return new CaseworkerUnassignRequest();
   }
 
   private UUID proceedingId(UUID applicationId) {

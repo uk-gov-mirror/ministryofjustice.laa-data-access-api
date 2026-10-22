@@ -17,8 +17,6 @@ paths:
     $ref: "./open-api-applications/resources.yml#/paths/~1api~1v0~1applications~1{id}~1unlink"
   /api/v0/applications/{id}/make-lead:
     $ref: "./open-api-applications/resources.yml#/paths/~1api~1v0~1applications~1{id}~1make-lead"
-  /api/v0/applications/{id}/unassign:
-    $ref: "./open-api-applications/resources.yml#/paths/~1api~1v0~1applications~1{id}~1unassign"
   /api/v0/applications/{id}/history-search:
     $ref: "./open-api-applications/resources.yml#/paths/~1api~1v0~1applications~1{id}~1history-search"
   /api/v0/applications/{id}/decision:

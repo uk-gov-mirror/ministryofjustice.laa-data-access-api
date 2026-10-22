@@ -358,23 +358,6 @@ curl -i -X POST http://localhost:8082/api/v0/work-list/8c9e6c2e-4f1a-4e3a-9c2b-1
 Response: `200 OK` with an empty body. The authenticated OID must be a UUID; it is persisted as
 the assignment identity without looking up a `caseworkers` table.
 
-`POST /api/v0/applications/{id}/unassign`
-
-```bash
-curl -i -X POST http://localhost:8082/api/v0/applications/8c9e6c2e-4f1a-4e3a-9c2b-1a2b3c4d5e6f/unassign \
-  -H "Content-Type: application/json" \
-  -H "X-Service-Name: CIVIL_DECIDE" \
-  -d '{
-    "eventHistory": {
-      "eventDescription": "Reassigning to specialist team"
-    }
-  }'
-```
-
-The `eventHistory` field (and the whole body) is optional — `{}` is a valid request.
-
-Response: `200 OK` with an empty body.
-
 ### Make a decision on an application
 
 `PATCH /api/v0/applications/{id}/decision`

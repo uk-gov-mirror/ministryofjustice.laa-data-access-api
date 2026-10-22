@@ -13,10 +13,3 @@ components:
       type: array
       items:
         $ref: "#/components/schemas/CaseworkerResponse"
-
-
-    CaseworkerUnassignRequest:
-      type: object
-      properties:
-        eventHistory:
-          $ref: "../open-api-common/components.yml#/components/schemas/EventHistoryRequest"

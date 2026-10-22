@@ -27,7 +27,6 @@ import uk.gov.justice.laa.dstew.access.model.ApplicationCreateRequest;
 import uk.gov.justice.laa.dstew.access.model.ApplicationLinkRequest;
 import uk.gov.justice.laa.dstew.access.model.ApplicationUpdateRequest;
 import uk.gov.justice.laa.dstew.access.model.AutoGrantOutcomeRequest;
-import uk.gov.justice.laa.dstew.access.model.CaseworkerUnassignRequest;
 import uk.gov.justice.laa.dstew.access.model.CreateNoteRequest;
 import uk.gov.justice.laa.dstew.access.model.DocumentType;
 import uk.gov.justice.laa.dstew.access.model.LinkedGroupChangeRequest;
@@ -102,15 +101,6 @@ public class ApplicationCommandController
     this.makeApplicationLeadCommandMapper = makeApplicationLeadCommandMapper;
     this.unlinkApplicationCommandMapper = unlinkApplicationCommandMapper;
     this.authenticatedUserId = authenticatedUserId;
-  }
-
-  /** Removes the current caseworker assignment from an Application. */
-  @Override
-  @LogMethodArguments
-  @LogMethodResponse
-  public ResponseEntity<Void> unassignCaseworker(
-      ServiceName serviceName, UUID id, CaseworkerUnassignRequest request) {
-    throw new UnsupportedOperationException("Deprecated: use the work-list/unassign method");
   }
 
   /** Links an Application to an existing Application family group. */
