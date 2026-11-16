@@ -39,6 +39,27 @@ For the main branch, extract DB environment variables from rds-postgresql-instan
     secretKeyRef:
       name: rds-postgresql-instance-output
       key: rds_instance_address
+{{- else if eq .Values.spring.profile "smoke" }}
+{{/*
+For per-run Kubernetes smoke tests, use the ephemeral PostgreSQL deployed with the release
+*/}}
+- name: DB_NAME
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Release.Name }}-smoke-postgres
+      key: database_name
+- name: DB_USERNAME
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Release.Name }}-smoke-postgres
+      key: database_username
+- name: DB_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Release.Name }}-smoke-postgres
+      key: database_password
+- name: DB_HOST
+  value: {{ .Release.Name }}-smoke-postgres
 {{- end }}
 {{- end }}
 
@@ -97,6 +118,16 @@ For the main branch, extract DB environment variables from rds-postgresql-instan
       name: laa-data-access-api-secrets
       key: ENTRA_AUD
 {{- end }}
+{{- if and .Values.smokeTest .Values.smokeTest.enabled }}
+- name: AUTH_CLIENT_ID
+  value: "smoke-client"
+- name: AUTH_CLIENT_SECRET
+  value: "smoke-secret"
+- name: AUTH_SCOPE
+  value: "sds.mock"
+- name: AUTH_TENANT_ID
+  value: "smoke"
+{{- else }}
 - name: AUTH_CLIENT_ID
   valueFrom:
     secretKeyRef:
@@ -117,6 +148,7 @@ For the main branch, extract DB environment variables from rds-postgresql-instan
     secretKeyRef:
       name: laa-data-access-api-secrets
       key: AUTH_TENANT_ID
+{{- end }}
 {{- end }}
 
 {{/*
@@ -173,6 +205,19 @@ For the main branch, extract DB environment variables from rds-postgresql-instan
   Define SDS API environment variables
 */}}
 {{- define "sdsApiConfig" }}
+{{- if and .Values.smokeTest .Values.smokeTest.enabled }}
+{{/* Per-run smoke tests: call the release's WireMock SDS instead of the real SDS */}}
+- name: SDS_API_URL
+  value: "http://{{ .Release.Name }}-sds:8080"
+- name: SDS_API_TOKEN_URI
+  value: "http://{{ .Release.Name }}-sds:8080/oauth/token"
+- name: SDS_API_BUCKET
+  value: {{ .Values.smokeTest.sds.bucket | quote }}
+- name: SDS_API_CLIENT_REGISTRATION_ID
+  value: {{ .Values.smokeTest.sds.clientRegistrationId | quote }}
+- name: SDS_API_PRINCIPAL_NAME
+  value: {{ .Values.smokeTest.sds.principalName | quote }}
+{{- else }}
 - name: SDS_API_URL
   valueFrom:
     secretKeyRef:
@@ -193,4 +238,5 @@ For the main branch, extract DB environment variables from rds-postgresql-instan
     secretKeyRef:
       name: laa-data-access-api-secrets
       key: SDS_API_PRINCIPAL_NAME
+{{- end }}
 {{- end }}

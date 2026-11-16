@@ -14,7 +14,7 @@
       "Content-Type": "application/json"
     },
     "jsonBody": {
-      "fileURL": "http://sds-wiremock-smoketest:8080/files/smoke-document.pdf"
+      "fileURL": "http://{{request.headers.Host}}/files/smoke-document.pdf"
     }
   }
 }

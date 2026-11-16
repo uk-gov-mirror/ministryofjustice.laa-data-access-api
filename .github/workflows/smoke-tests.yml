@@ -1,0 +1,159 @@
+name: Smoke tests
+
+# Reusable only: run from the build workflows after the candidate image is published.
+# Creates a per-run stack in the uat namespace, runs the @smoke BDD scenarios through
+# port-forwards and always removes the resources created for this run.
+on:
+  workflow_call:
+    inputs:
+      image-tag:
+        description: "Published image tag to test and later deploy"
+        required: true
+        type: string
+    secrets:
+      KUBE_CERT:
+        required: true
+      KUBE_TOKEN:
+        required: true
+      KUBE_CLUSTER:
+        required: true
+      KUBE_NAMESPACE:
+        required: true
+      ECR_ROLE_TO_ASSUME:
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  smoke-tests:
+    name: Kubernetes smoke tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: uat
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+      KUBE_NAMESPACE: ${{ secrets.KUBE_NAMESPACE }}
+      AWS_REGION: ${{ vars.ECR_REGION }}
+      IMAGE_TAG: ${{ inputs.image-tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          java-version: '25'
+          distribution: corretto
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+
+      - name: Verify smoke-test scripts and network policies
+        shell: bash
+        run: |
+          bash scripts/test-kubernetes-smoke-stack.sh
+          bash scripts/test-smoke-network-policies.sh
+
+      - name: Authenticate to cluster and ECR
+        id: prerequisites
+        uses: ./.github/actions/deploy_prerequisites
+        with:
+          kube-cert: ${{ secrets.KUBE_CERT }}
+          kube-token: ${{ secrets.KUBE_TOKEN }}
+          kube-cluster: ${{ secrets.KUBE_CLUSTER }}
+          kube-namespace: ${{ secrets.KUBE_NAMESPACE }}
+          ecr-role-to-assume: ${{ secrets.ECR_ROLE_TO_ASSUME }}
+          ecr-region: ${{ vars.ECR_REGION }}
+
+      - name: Deploy smoke-test stack
+        env:
+          IMAGE_REPOSITORY: ${{ steps.prerequisites.outputs.ecr-registry }}/${{ vars.ECR_REPOSITORY }}
+        run: ./scripts/kubernetes-smoke-stack.sh up
+
+      - name: Port forward to API
+        uses: ./.github/actions/port-forward
+        with:
+          kube_namespace: ${{ secrets.KUBE_NAMESPACE }}
+          pod_selector: app.kubernetes.io/instance=smoke-${{ env.RUN_ID }},app.kubernetes.io/name=data-access-api
+          local_port: "8080"
+          remote_port: "8082"
+          pid_env_var: APP_PORT_FORWARD_PID
+
+      - name: Port forward to mock Entra
+        uses: ./.github/actions/port-forward
+        with:
+          kube_namespace: ${{ secrets.KUBE_NAMESPACE }}
+          pod_selector: laa-smoke-run-id=${{ env.RUN_ID }},app.kubernetes.io/component=smoke-mock-oauth2
+          local_port: "9998"
+          remote_port: "9999"
+          pid_env_var: MOCK_OAUTH_PORT_FORWARD_PID
+
+      - name: Run BDD smoke tests
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+          LAA_BDD_BASE_URL: http://localhost:8080
+          LAA_BDD_TOKEN_URL: http://localhost:9998/entra/token
+          # Must match the issuer the API validates against (ENTRA_ISSUER_URI in-cluster)
+          LAA_BDD_TOKEN_ISSUER_HOST: smoke-${{ env.RUN_ID }}-mock-oauth2.${{ secrets.KUBE_NAMESPACE }}.svc.cluster.local:9999
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 60); do
+            if curl --fail --silent --show-error --max-time 5 "${LAA_BDD_BASE_URL}/actuator/health" > /dev/null; then
+              echo "API ready after ${i} attempt(s)."
+              break
+            fi
+            [ "$i" -eq 60 ] && { echo "API health endpoint not ready." >&2; exit 1; }
+            sleep 5
+          done
+          ./gradlew :data-access-service-axon:bddTest \
+            -Dcucumber.filter.tags='@smoke' \
+            --rerun-tasks \
+            --console=plain
+
+      - name: Collect diagnostics
+        if: always()
+        shell: bash
+        run: |
+          DIAG=data-access-service-axon/build/reports/smoke-stack
+          mkdir -p "$DIAG"
+          kubectl -n "$KUBE_NAMESPACE" get pods,deployments,services -l "laa-smoke-run-id=$RUN_ID" -o wide > "$DIAG/status.txt" 2>&1 || true
+          kubectl -n "$KUBE_NAMESPACE" get pods -l "app.kubernetes.io/instance=smoke-$RUN_ID" -o wide >> "$DIAG/status.txt" 2>&1 || true
+          kubectl -n "$KUBE_NAMESPACE" get events --sort-by=.lastTimestamp > "$DIAG/events.txt" 2>&1 || true
+          for component in smoke-postgres mock-oauth2 sds; do
+            kubectl -n "$KUBE_NAMESPACE" logs "deployment/smoke-$RUN_ID-$component" --all-containers --tail=500 \
+              > "$DIAG/$component.log" 2>&1 || true
+          done
+          kubectl -n "$KUBE_NAMESPACE" logs "deployment/smoke-$RUN_ID-data-access-api" --all-containers --tail=1000 \
+            > "$DIAG/api.log" 2>&1 || true
+
+      - name: Upload smoke-test reports and diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: smoke-test-reports
+          path: |
+            data-access-service-axon/build/reports/cucumber/
+            data-access-service-axon/build/reports/tests/bddTest/
+            data-access-service-axon/build/test-results/bddTest/
+            data-access-service-axon/build/reports/smoke-stack/
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Stop port-forwards
+        if: always()
+        shell: bash
+        run: |
+          for pid in "${APP_PORT_FORWARD_PID:-}" "${MOCK_OAUTH_PORT_FORWARD_PID:-}"; do
+            [ -n "$pid" ] && kill "$pid" 2>/dev/null || true
+          done
+
+      - name: Remove smoke-test stack
+        if: always()
+        shell: bash
+        run: ./scripts/kubernetes-smoke-stack.sh down

@@ -1,0 +1,37 @@
+name: Clean up abandoned smoke-test stacks
+
+# Removes per-run smoke-test resources left behind by cancelled or crashed runs.
+# Only resources labelled app.kubernetes.io/part-of=laa-data-access-smoke-test are affected.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup:
+    name: Remove abandoned smoke-test stacks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: uat
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      KUBE_NAMESPACE: ${{ secrets.KUBE_NAMESPACE }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Authenticate to cluster
+        uses: ./.github/actions/deploy_prerequisites
+        with:
+          kube-cert: ${{ secrets.KUBE_CERT }}
+          kube-token: ${{ secrets.KUBE_TOKEN }}
+          kube-cluster: ${{ secrets.KUBE_CLUSTER }}
+          kube-namespace: ${{ secrets.KUBE_NAMESPACE }}
+          ecr-role-to-assume: ${{ secrets.ECR_ROLE_TO_ASSUME }}
+          ecr-region: ${{ vars.ECR_REGION }}
+
+      - name: Remove stacks older than six hours
+        run: ./scripts/kubernetes-smoke-stack.sh cleanup-abandoned 6

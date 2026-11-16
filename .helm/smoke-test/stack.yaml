@@ -1,0 +1,268 @@
+# Per-run smoke-test dependencies. Rendered by scripts/kubernetes-smoke-stack.sh with envsubst
+# using only RELEASE_NAME, RUN_ID, CREATED_EPOCH, POSTGRES_PASSWORD, POSTGRES_DB and POSTGRES_USER.
+# Config files are mounted from ConfigMaps created by the script from infra/.
+# No Services are exposed through ingress; the runner reaches them with port-forwards.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ${RELEASE_NAME}-smoke-postgres
+  labels:
+    app.kubernetes.io/part-of: laa-data-access-smoke-test
+    laa-smoke-run-id: "${RUN_ID}"
+    laa-smoke-created-epoch: "${CREATED_EPOCH}"
+type: Opaque
+stringData:
+  database_name: "${POSTGRES_DB}"
+  database_username: "${POSTGRES_USER}"
+  database_password: "${POSTGRES_PASSWORD}"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${RELEASE_NAME}-smoke-postgres
+  labels:
+    app.kubernetes.io/part-of: laa-data-access-smoke-test
+    app.kubernetes.io/component: smoke-postgres
+    laa-smoke-run-id: "${RUN_ID}"
+    laa-smoke-created-epoch: "${CREATED_EPOCH}"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      laa-smoke-run-id: "${RUN_ID}"
+      app.kubernetes.io/component: smoke-postgres
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: laa-data-access-smoke-test
+        app.kubernetes.io/component: smoke-postgres
+        laa-smoke-run-id: "${RUN_ID}"
+        laa-smoke-created-epoch: "${CREATED_EPOCH}"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: postgres
+          image: postgres:17
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          ports:
+            - containerPort: 5432
+          env:
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: ${RELEASE_NAME}-smoke-postgres
+                  key: database_name
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: ${RELEASE_NAME}-smoke-postgres
+                  key: database_username
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ${RELEASE_NAME}-smoke-postgres
+                  key: database_password
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""]
+            periodSeconds: 5
+            failureThreshold: 12
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ${RELEASE_NAME}-smoke-postgres
+  labels:
+    app.kubernetes.io/part-of: laa-data-access-smoke-test
+    laa-smoke-run-id: "${RUN_ID}"
+    laa-smoke-created-epoch: "${CREATED_EPOCH}"
+spec:
+  selector:
+    laa-smoke-run-id: "${RUN_ID}"
+    app.kubernetes.io/component: smoke-postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${RELEASE_NAME}-mock-oauth2
+  labels:
+    app.kubernetes.io/part-of: laa-data-access-smoke-test
+    app.kubernetes.io/component: smoke-mock-oauth2
+    laa-smoke-run-id: "${RUN_ID}"
+    laa-smoke-created-epoch: "${CREATED_EPOCH}"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      laa-smoke-run-id: "${RUN_ID}"
+      app.kubernetes.io/component: smoke-mock-oauth2
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: laa-data-access-smoke-test
+        app.kubernetes.io/component: smoke-mock-oauth2
+        laa-smoke-run-id: "${RUN_ID}"
+        laa-smoke-created-epoch: "${CREATED_EPOCH}"
+    spec:
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: mock-oauth2
+          # Version: 6.0.2 (matches docker-compose.smoke-test.yml)
+          image: ghcr.io/navikt/mock-oauth2-server:6.0.2
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          ports:
+            - containerPort: 9999
+          env:
+            - name: SERVER_PORT
+              value: "9999"
+            - name: JSON_CONFIG_PATH
+              value: /etc/mock-oauth2/config.json
+          readinessProbe:
+            httpGet:
+              path: /entra/.well-known/openid-configuration
+              port: 9999
+            periodSeconds: 5
+            failureThreshold: 12
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: config
+              mountPath: /etc/mock-oauth2
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: ${RELEASE_NAME}-mock-oauth2-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ${RELEASE_NAME}-mock-oauth2
+  labels:
+    app.kubernetes.io/part-of: laa-data-access-smoke-test
+    laa-smoke-run-id: "${RUN_ID}"
+    laa-smoke-created-epoch: "${CREATED_EPOCH}"
+spec:
+  selector:
+    laa-smoke-run-id: "${RUN_ID}"
+    app.kubernetes.io/component: smoke-mock-oauth2
+  ports:
+    - name: http
+      port: 9999
+      targetPort: 9999
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${RELEASE_NAME}-sds
+  labels:
+    app.kubernetes.io/part-of: laa-data-access-smoke-test
+    app.kubernetes.io/component: smoke-sds
+    laa-smoke-run-id: "${RUN_ID}"
+    laa-smoke-created-epoch: "${CREATED_EPOCH}"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      laa-smoke-run-id: "${RUN_ID}"
+      app.kubernetes.io/component: smoke-sds
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: laa-data-access-smoke-test
+        app.kubernetes.io/component: smoke-sds
+        laa-smoke-run-id: "${RUN_ID}"
+        laa-smoke-created-epoch: "${CREATED_EPOCH}"
+    spec:
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: sds-wiremock
+          # Version: 3.13.1 (matches docker-compose.smoke-test.yml)
+          image: wiremock/wiremock:3.13.1
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          args: ["--global-response-templating"]
+          ports:
+            - containerPort: 8080
+          readinessProbe:
+            tcpSocket:
+              port: 8080
+            periodSeconds: 5
+            failureThreshold: 12
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: mappings
+              mountPath: /home/wiremock/mappings
+              readOnly: true
+      volumes:
+        - name: mappings
+          configMap:
+            name: ${RELEASE_NAME}-sds-mappings
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ${RELEASE_NAME}-sds
+  labels:
+    app.kubernetes.io/part-of: laa-data-access-smoke-test
+    laa-smoke-run-id: "${RUN_ID}"
+    laa-smoke-created-epoch: "${CREATED_EPOCH}"
+spec:
+  selector:
+    laa-smoke-run-id: "${RUN_ID}"
+    app.kubernetes.io/component: smoke-sds
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080

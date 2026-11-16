@@ -1,0 +1,44 @@
+# Per-run Kubernetes smoke-test overlay.
+# Install with: --values values/uat.yaml --values values/smoke-test.yaml
+# Requires the release-scoped PostgreSQL, WireMock SDS and mock OAuth2 resources from
+# .helm/smoke-test/stack.yaml, which share the same release name.
+# Set by the workflow: spring.profile=smoke, mockOAuth2.sharedInstance.serviceName and namespace.
+
+smokeTest:
+  enabled: true
+  sds:
+    bucket: smoke-test-bucket
+    clientRegistrationId: smoke-sds
+    principalName: smoke-sds
+
+ingress:
+  enabled: false
+
+ingressInternal:
+  enabled: false
+
+grafana:
+  enabled: false
+
+portForward:
+  enabled: false
+
+mockOAuth2:
+  sharedInstance:
+    enabled: true
+
+autoscaling:
+  enabled: false
+
+sentry:
+  enabled: false
+  environment: smoke
+  tracesSampleRate: "0"
+
+aws:
+  integrationEvents:
+    enabled: false
+
+featureFlags:
+  enable_dev_token: "true"
+  disable_security: "false"

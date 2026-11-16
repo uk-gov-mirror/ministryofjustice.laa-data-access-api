@@ -3,19 +3,14 @@
 # run-infrastructure-smoke-tests.sh
 #
 # Builds the application JAR, starts the full local infrastructure via
-# docker-compose.smoke-test.yml (Postgres + the app itself), runs all tests
-# annotated with @SmokeTest in infrastructure mode, then tears everything
-# down — whether the tests pass or fail.
+# docker-compose.smoke-test.yml, runs the Cucumber @smoke scenarios against
+# the live Axon service, then collects diagnostics and tears everything down.
 #
 # Usage:
 #   ./scripts/run-infrastructure-smoke-tests.sh
 #
-# The following env vars default to the local docker-compose values but can
-# be overridden if needed:
-#   LAA_SMOKE_ACCESS_API_URL      (default: http://localhost:9000)
-#   LAA_SMOKE_ACCESS_DB_URL       (default: jdbc:postgresql://localhost:6432/laa_data_access_api)
-#   LAA_SMOKE_ACCESS_DB_USERNAME  (default: laa_user)
-#   LAA_SMOKE_ACCESS_DB_PASSWORD  (default: laa_password)
+# BDD configuration defaults match the local stack. See
+# data-access-service-axon/docs/testing/bdd-testing-framework.md.
 # ---------------------------------------------------------------------------
 
 set -euo pipefail
@@ -24,6 +19,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 COMPOSE_FILE="${ROOT_DIR}/docker-compose.smoke-test.yml"
 COMPOSE_PROJECT="laa-data-access-smoke-test"
+DIAGNOSTICS_DIR="${ROOT_DIR}/data-access-service-axon/build/reports/smoke-stack"
+mkdir -p "${DIAGNOSTICS_DIR}"
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -36,19 +33,37 @@ fail() { echo "[$(date '+%H:%M:%S')] ERROR: $*" >&2; exit 1; }
 # ---------------------------------------------------------------------------
 teardown() {
   local exit_code=$?
+  trap - EXIT
+  log "Collecting container diagnostics..."
+  if ! docker compose -f "${COMPOSE_FILE}" -p "${COMPOSE_PROJECT}" ps --all \
+    > "${DIAGNOSTICS_DIR}/status.txt" 2>&1; then
+    log "ERROR: Could not collect container status."
+    [ "${exit_code}" -ne 0 ] || exit_code=1
+  fi
+  if ! docker compose -f "${COMPOSE_FILE}" -p "${COMPOSE_PROJECT}" logs --no-color \
+    > "${DIAGNOSTICS_DIR}/containers.log" 2>&1; then
+    log "ERROR: Could not collect container logs."
+    [ "${exit_code}" -ne 0 ] || exit_code=1
+  fi
   log "Tearing down local infrastructure..."
-  docker compose -f "${COMPOSE_FILE}" -p "${COMPOSE_PROJECT}" down --volumes --remove-orphans || true
-  log "Infrastructure stopped."
+  if docker compose -f "${COMPOSE_FILE}" -p "${COMPOSE_PROJECT}" down --volumes --remove-orphans; then
+    log "Infrastructure stopped."
+  else
+    log "ERROR: Infrastructure teardown failed."
+    [ "${exit_code}" -ne 0 ] || exit_code=1
+  fi
   exit "${exit_code}"
 }
 trap teardown EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 # ---------------------------------------------------------------------------
 # 1. Build the application JAR (required by the Dockerfile COPY step)
 # ---------------------------------------------------------------------------
 log "Building application JAR..."
 cd "${ROOT_DIR}"
-./gradlew :data-access-service:bootJar --quiet \
+./gradlew :data-access-service-axon:bootJar --quiet \
   || fail "Gradle bootJar build failed."
 log "JAR built successfully."
 
@@ -56,52 +71,41 @@ log "JAR built successfully."
 # 2. Start full infrastructure and wait until all services are healthy
 # ---------------------------------------------------------------------------
 log "Starting local infrastructure (docker-compose.smoke-test.yml)..."
-docker compose -f "${COMPOSE_FILE}" -p "${COMPOSE_PROJECT}" up --build --detach --wait \
+docker compose -f "${COMPOSE_FILE}" -p "${COMPOSE_PROJECT}" up --build --detach --wait --wait-timeout 180 \
   || fail "docker compose failed to start all services in a healthy state."
 log "All services are healthy."
 
-# Wait for Tomcat to accept real requests (healthcheck alone is not sufficient)
-log "Waiting for app to accept traffic..."
-READINESS_URL="${LAA_SMOKE_ACCESS_API_URL:-http://localhost:9000}/api/v0/caseworkers"
-for i in $(seq 1 120); do
-  HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-    -H "X-Service-Name: CIVIL_APPLY" \
-    "${READINESS_URL}" 2>/dev/null) || true
-  if [ "${HTTP_CODE:-000}" != "000" ]; then
-    log "App ready (HTTP ${HTTP_CODE})."
+# Also verify the published host port used by the BDD client.
+log "Waiting for app health endpoint..."
+READINESS_URL="${LAA_BDD_BASE_URL:-http://localhost:9000}/actuator/health"
+for i in $(seq 1 30); do
+  if curl --fail --silent --show-error --connect-timeout 2 --max-time 5 \
+    "${READINESS_URL}" > "${DIAGNOSTICS_DIR}/health.json"; then
+    log "App ready."
     break
   fi
-  [ "${i}" -eq 120 ] && fail "App did not become ready within 120 seconds."
-  sleep 1
+  [ "${i}" -eq 30 ] && fail "App health endpoint did not become ready after 30 attempts."
+  sleep 2
 done
 
 # ---------------------------------------------------------------------------
-# 3. Run @SmokeTest-annotated tests in infrastructure mode
-#    LAA_SMOKE_ACCESS_* env vars are read by InfrastructureTestContextProvider.
-#    LAA_SMOKE_OAUTH_TOKEN_URL is used by SmokeTestTokenProvider to obtain tokens.
-#    The infrastructureTest Gradle task sets test.mode=infrastructure
-#    unconditionally, so HarnessExtension selects InfrastructureTestContextProvider
-#    and the includeTags('smoke') filter ensures only @SmokeTest tests execute.
+# 3. Run Cucumber @smoke scenarios. Playwright only needs its HTTP client.
 # ---------------------------------------------------------------------------
 log "Running infrastructure smoke tests..."
-LAA_SMOKE_ACCESS_API_URL="${LAA_SMOKE_ACCESS_API_URL:-http://localhost:9000}" \
-LAA_SMOKE_ACCESS_DB_URL="${LAA_SMOKE_ACCESS_DB_URL:-jdbc:postgresql://localhost:6432/laa_data_access_api}" \
-LAA_SMOKE_ACCESS_DB_USERNAME="${LAA_SMOKE_ACCESS_DB_USERNAME:-laa_user}" \
-LAA_SMOKE_ACCESS_DB_PASSWORD="${LAA_SMOKE_ACCESS_DB_PASSWORD:-laa_password}" \
-LAA_SMOKE_OAUTH_TOKEN_URL="${LAA_SMOKE_OAUTH_TOKEN_URL:-http://localhost:9998/entra/token}" \
-./gradlew :data-access-service:infrastructureTest \
-  --continue \
+TEST_EXIT_CODE=0
+PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
+./gradlew :data-access-service-axon:bddTest \
+  -Dcucumber.filter.tags='@smoke' \
+  --rerun-tasks \
   --console=plain \
-  || true
-TEST_EXIT_CODE=$?
+  || TEST_EXIT_CODE=$?
 
 if [ "${TEST_EXIT_CODE}" -eq 0 ]; then
   log "Infrastructure smoke tests PASSED."
 else
   log "Infrastructure smoke tests FAILED (exit code ${TEST_EXIT_CODE})."
-  log "Full report: ${ROOT_DIR}/data-access-service/build/reports/tests/infrastructureTest/index.html"
+  log "Full report: ${ROOT_DIR}/data-access-service-axon/build/reports/cucumber/index.html"
 fi
 
 # Exit with the test exit code; the trap will handle teardown.
 exit "${TEST_EXIT_CODE}"
-

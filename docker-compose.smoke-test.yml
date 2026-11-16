@@ -30,10 +30,11 @@ services:
     volumes:
       - ./infra/mock-oauth2/config-smoke-test.json:/etc/mock-oauth2/config.json:ro
     healthcheck:
-      # navikt/mock-oauth2-server uses a distroless JVM base image (no shell, no wget/curl).
-      # CMD-SHELL is unavailable, so we probe the HTTP endpoint via /dev/tcp in bash-free sh.
-      # The simplest reliable approach is to disable the healthcheck and let the app retry.
-      disable: true
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9999/entra/.well-known/openid-configuration || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
 
   sds-wiremock-smoketest:
     image: wiremock/wiremock:3.13.1
@@ -87,7 +88,7 @@ services:
       postgres-smoketest:
         condition: service_healthy
       mock-oauth2-server-smoketest:
-        condition: service_started
+        condition: service_healthy
       sds-wiremock-smoketest:
         condition: service_started
 

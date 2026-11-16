@@ -1,3 +1,4 @@
+{{- if not (and .Values.smokeTest .Values.smokeTest.enabled) }}
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -12,3 +13,4 @@ spec:
         - namespaceSelector:
             matchLabels:
               component: monitoring
+{{- end }}

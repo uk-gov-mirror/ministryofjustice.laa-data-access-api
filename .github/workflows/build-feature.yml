@@ -65,24 +65,6 @@ jobs:
     secrets:
       gh_token: ${{ secrets.GITHUB_TOKEN }}
 
-  vulnerability-scan-app:
-    runs-on: ubuntu-latest
-    needs: [ build-and-test ]
-    permissions:
-      contents: read
-    env:
-      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-      SNYK_TEST_EXCLUDE: build,generated
-      SNYK_TARGET_REFERENCE: main
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Run Snyk to check app for vulnerabilities
-        uses: snyk/actions/gradle@9adf32b1121593767fc3c057af55b55db032dc04 #master
-        with:
-          command: code test
-          args: --severity-threshold=high
-
   ecr-publish-service-image:
     needs: [ build-and-test, compute-snapshot-version ]
     uses: ministryofjustice/laa-ccms-common-workflows/.github/workflows/ecr-publish-image.yml@035ee98ca0047659f865532ea6234abd69529ee8 # v2.5.0
@@ -101,9 +83,42 @@ jobs:
       ecr_region: ${{ vars.ECR_REGION }}
       ecr_role_to_assume: ${{ secrets.ECR_ROLE_TO_ASSUME }}
 
+  smoke-tests:
+    needs: [ ecr-publish-service-image, vulnerability-scan-app ]
+    uses: ./.github/workflows/smoke-tests.yml
+    with:
+      image-tag: ${{ needs.ecr-publish-service-image.outputs.published_image_version }}
+    secrets:
+      KUBE_CERT: ${{ secrets.KUBE_CERT }}
+      KUBE_TOKEN: ${{ secrets.KUBE_TOKEN }}
+      KUBE_CLUSTER: ${{ secrets.KUBE_CLUSTER }}
+      KUBE_NAMESPACE: ${{ secrets.KUBE_NAMESPACE }}
+      ECR_ROLE_TO_ASSUME: ${{ secrets.ECR_ROLE_TO_ASSUME }}
+    permissions:
+      contents: read
+      id-token: write
+
+  vulnerability-scan-app:
+    runs-on: ubuntu-latest
+    needs: [ build-and-test ]
+    permissions:
+      contents: read
+    env:
+      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      SNYK_TEST_EXCLUDE: build,generated
+      SNYK_TARGET_REFERENCE: main
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Run Snyk to check app for vulnerabilities
+        uses: snyk/actions/gradle@9adf32b1121593767fc3c057af55b55db032dc04 #master
+        with:
+          command: code test
+          args: --severity-threshold=high
+
   deploy-ephemeral:
     runs-on: ubuntu-latest
-    needs: [ ecr-publish-service-image, vulnerability-scan-app, compute-snapshot-version ]
+    needs: [ ecr-publish-service-image, smoke-tests, vulnerability-scan-app, compute-snapshot-version ]
 
     environment: uat
     permissions:
@@ -127,4 +142,4 @@ jobs:
           kube-namespace: ${{ secrets.KUBE_NAMESPACE }}
           app-environment: uat
           pr-number: ${{ github.event.pull_request.number }}
-          image-tag: ${{ needs.compute-snapshot-version.outputs.snapshot_version }}
+          image-tag: ${{ needs.ecr-publish-service-image.outputs.published_image_version }}
